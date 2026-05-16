@@ -231,14 +231,36 @@ function setupRealtimeSubscriptions() {
   state.realtimeSubscriptions.payments = paymentsChannel;
 }
 
+// Hydrate media_accounts rows with their owner profile in a second round-trip.
+// We can't use PostgREST embedded selects (?select=*,profiles(...)) because
+// media_accounts has no foreign key to profiles in this schema — and the global
+// pool sentinel user_id 00000000-... isn't a real profile, so adding a strict FK
+// would break it. Two queries cost nothing at this volume.
+async function attachInventoryProfiles(accounts) {
+  if (!accounts || accounts.length === 0) return;
+  const ids = [...new Set(accounts.map(a => a.user_id).filter(Boolean))];
+  if (ids.length === 0) return;
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, email, full_name')
+    .in('id', ids);
+  const map = {};
+  (profiles || []).forEach(p => { map[p.id] = p; });
+  accounts.forEach(a => {
+    if (a.user_id && map[a.user_id]) a.profiles = map[a.user_id];
+  });
+}
+
 // Fast refresh for inventory without re-rendering entire view
 async function refreshInventoryData() {
   try {
     const { data: accounts, error } = await supabase.from('media_accounts')
-      .select('*, profiles(email, full_name)')
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+
+    await attachInventoryProfiles(accounts);
 
     const total = accounts.length;
     const used = accounts.filter(a => a.user_id).length;
@@ -1049,12 +1071,13 @@ async function renderInventoryView() {
   try {
     // We need to fetch profiles via user_id, but supabase-js simple query might simply return the ID.
     // Ideally we join, but let's try simple first to not break if permissions are weird on join.
-    // select(*, profiles(email))
     const { data: accounts, error } = await supabase.from('media_accounts')
-      .select('*, profiles(email, full_name)') // Trying join since I fixed profiles RLS
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+
+    await attachInventoryProfiles(accounts);
 
     const total = accounts.length;
     const used = accounts.filter(a => a.user_id).length;
