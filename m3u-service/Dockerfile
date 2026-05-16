@@ -4,4 +4,6 @@ COPY package.json ./
 COPY server.js ./
 EXPOSE 3000
 ENV NODE_ENV=production
-CMD ["node", "server.js"]
+# Upstream IPTV servers refuse IPv6 connections (no AAAA / DC IPv6 blocks).
+# Prefer IPv4 for outbound DNS so node:fetch doesn't pick a v6 address first.
+CMD ["node", "--dns-result-order=ipv4first", "server.js"]
