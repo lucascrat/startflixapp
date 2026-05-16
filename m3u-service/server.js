@@ -118,6 +118,102 @@ async function handleM3U(req, res, pathname) {
   res.end();
 }
 
+// ---------------------------------------------------------------
+// Stream tracking endpoints
+//
+// The /<user>.m3u redirect is a "passive" playlist fetch — just navigation,
+// doesn't count as watching. The Android player calls these three endpoints
+// to mark when it's actually playing so the admin sees real usage and the
+// signal rotator only steals from users who are not currently watching.
+//
+//   POST /stream/start       { user_id, channel_id?, channel_name?, client_info? }
+//     -> 200 { session_id, dns, username, password, account_id }
+//        Begin (or refresh) the user's active session. Pass the session_id
+//        to subsequent heartbeats/stops. Closes any prior open session for
+//        the user automatically.
+//
+//   POST /stream/heartbeat   { session_id, channel_id?, channel_name? }
+//     -> 200 { ok: true }
+//        Call every ~30s while playing. Updates the heartbeat timestamp
+//        and the (optional) current channel.
+//
+//   POST /stream/stop        { session_id }
+//     -> 200 { ok: true, closed: <0|1> }
+//        Mark the session ended (player closed, app backgrounded too long,
+//        user logged out, etc).
+//
+// All three accept GET too with the same params as query string — convenient
+// for quick testing from a browser.
+// ---------------------------------------------------------------
+
+async function readJsonBody(req) {
+  return new Promise((resolve) => {
+    let buf = '';
+    req.on('data', c => { buf += c; if (buf.length > 1e6) req.destroy(); });
+    req.on('end', () => {
+      if (!buf) return resolve({});
+      try { resolve(JSON.parse(buf)); } catch { resolve({}); }
+    });
+    req.on('error', () => resolve({}));
+  });
+}
+
+async function getStreamArgs(req, url) {
+  const body = req.method === 'POST' ? await readJsonBody(req) : {};
+  const qs = Object.fromEntries(url.searchParams.entries());
+  return { ...qs, ...body };
+}
+
+function sendJson(res, status, payload) {
+  res.writeHead(status, { ...CORS, 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(payload));
+}
+
+async function handleStreamStart(req, res, url) {
+  const args = await getStreamArgs(req, url);
+  if (!args.user_id) return sendJson(res, 400, { success: false, error: 'user_id required' });
+  try {
+    const r = await callRpc('stream_start', {
+      p_user_id: args.user_id,
+      p_channel_id: args.channel_id || null,
+      p_channel_name: args.channel_name || null,
+      p_client_info: args.client_info || null,
+    });
+    return sendJson(res, 200, r);
+  } catch (err) {
+    console.error('[stream_start]', err.message);
+    return sendJson(res, 500, { success: false, error: err.message });
+  }
+}
+
+async function handleStreamHeartbeat(req, res, url) {
+  const args = await getStreamArgs(req, url);
+  if (!args.session_id) return sendJson(res, 400, { success: false, error: 'session_id required' });
+  try {
+    const r = await callRpc('stream_heartbeat', {
+      p_session_id: args.session_id,
+      p_channel_id: args.channel_id || null,
+      p_channel_name: args.channel_name || null,
+    });
+    return sendJson(res, 200, r);
+  } catch (err) {
+    console.error('[stream_heartbeat]', err.message);
+    return sendJson(res, 500, { success: false, error: err.message });
+  }
+}
+
+async function handleStreamStop(req, res, url) {
+  const args = await getStreamArgs(req, url);
+  if (!args.session_id) return sendJson(res, 400, { success: false, error: 'session_id required' });
+  try {
+    const r = await callRpc('stream_stop', { p_session_id: args.session_id });
+    return sendJson(res, 200, r);
+  } catch (err) {
+    console.error('[stream_stop]', err.message);
+    return sendJson(res, 500, { success: false, error: err.message });
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, CORS);
@@ -132,9 +228,20 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok: true, service: 'startflix-m3u' }));
   }
 
+  if (pathname === '/stream/start')     return handleStreamStart(req, res, url);
+  if (pathname === '/stream/heartbeat') return handleStreamHeartbeat(req, res, url);
+  if (pathname === '/stream/stop')      return handleStreamStop(req, res, url);
+
   if (pathname === '/' && !url.searchParams.get('uid')) {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    return res.end('startflix-m3u: use /<user_id>.m3u or /master.m3u');
+    return res.end(
+      'startflix-m3u\n' +
+      '  GET  /<user_id>.m3u   -> 302 to per-user playlist (passive)\n' +
+      '  GET  /master.m3u      -> 302 to master playlist (passive)\n' +
+      '  POST /stream/start    { user_id, channel_id?, channel_name?, client_info? }\n' +
+      '  POST /stream/heartbeat { session_id, channel_id?, channel_name? }\n' +
+      '  POST /stream/stop     { session_id }\n'
+    );
   }
 
   if (req.method !== 'GET') {
