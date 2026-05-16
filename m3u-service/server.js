@@ -1,14 +1,16 @@
 // startflix-m3u: tiny HTTP service that replaces the old Supabase Edge Function `get-m3u`.
 //
-// Behaviour mirrors the original:
+// Behaviour:
 //   GET /<id>.m3u            -> per-user link, calls acquire_m3u_signal(p_user_id, true)
 //   GET /master.m3u          -> master pool, calls acquire_global_signal()
 //   GET /?uid=<id>           -> same as /<id>.m3u
-//   GET /functions/v1/get-m3u/<id>.m3u  -> legacy path kept for any clients still on the old URL
+//   GET /functions/v1/get-m3u/<id>.m3u  -> legacy path kept for clients still on the old URL
 //
-// It calls PostgREST RPCs on the new database, builds the upstream IPTV URL, and
-// streams the playlist back so the client only ever sees our HTTPS endpoint
-// (the old "tunnel HTTP → HTTPS" trick that lets Smart TVs play the stream).
+// After picking the signal (rotation logic lives in the DB RPC), the service
+// 302-redirects to the upstream IPTV URL. The Android client app follows the
+// redirect from its residential IP so the IPTV provider's datacenter-IP block
+// (Contabo, etc.) doesn't matter — the actual playlist fetch never originates
+// from our server.
 
 import http from 'node:http';
 import { URL } from 'node:url';
@@ -101,51 +103,19 @@ async function handleM3U(req, res, pathname) {
   }
 
   const upstream = buildUpstreamUrl(signal);
-  console.log(`[tunnel] ${isMaster ? 'master' : userId} -> ${upstream}`);
+  console.log(`[redirect] ${isMaster ? 'master' : userId} -> ${upstream}`);
 
-  let upstreamRes;
-  try {
-    upstreamRes = await fetch(upstream, {
-      headers: { 'User-Agent': TV_USER_AGENT },
-      redirect: 'follow',
-    });
-  } catch (err) {
-    console.error('[fetch]', err.message);
-    res.writeHead(200, { ...CORS, 'Content-Type': 'text/plain' });
-    res.end(errorM3U('ERRO DE CONEXAO AO SERVIDOR'));
-    return;
-  }
-
-  console.log(`[upstream] status=${upstreamRes.status} content-length=${upstreamRes.headers.get('content-length') || '-'} content-type=${upstreamRes.headers.get('content-type') || '-'}`);
-
-  // Buffer the upstream playlist fully and send it back. M3U files are text
-  // (a few MB at most for full lineups), so streaming buys nothing and Cloudflare
-  // behaves better with a known Content-Length than with a chunked stream.
-  let body;
-  try {
-    body = Buffer.from(await upstreamRes.arrayBuffer());
-  } catch (err) {
-    console.error('[buffer]', err.message);
-    res.writeHead(200, { ...CORS, 'Content-Type': 'text/plain' });
-    res.end(errorM3U('ERRO AO LER PLAYLIST'));
-    return;
-  }
-  console.log(`[upstream] body bytes=${body.length}`);
-
-  if (!upstreamRes.ok || body.length === 0) {
-    res.writeHead(200, { ...CORS, 'Content-Type': 'text/plain' });
-    return res.end(errorM3U(`UPSTREAM ${upstreamRes.status}`));
-  }
-
-  res.writeHead(200, {
+  // The IPTV provider blocks all datacenter IPs (Contabo, etc.) and would
+  // 404 us if we tried to proxy the playlist server-side. The consumers
+  // (Android app, IPTV players on residential networks) follow redirects
+  // fine, so just hand them the upstream URL and let them fetch directly
+  // from their own residential IP.
+  res.writeHead(302, {
     ...CORS,
-    'Content-Type': 'application/vnd.apple.mpegurl',
-    'Content-Length': body.length,
-    'Content-Disposition': 'inline; filename="playlist.m3u8"',
+    'Location': upstream,
     'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Access-Control-Expose-Headers': 'Content-Disposition',
   });
-  res.end(body);
+  res.end();
 }
 
 const server = http.createServer(async (req, res) => {
