@@ -1,0 +1,136 @@
+Total lines: 556350
+
+Stats:
+Movies: 25206
+Series: 251980
+Channels: 988
+
+--- MOVIE GROUPS DETECTED ---
+Adulto +18: 8043
+Drama: 2629
+ComÃ©dia: 1926
+AÃ§Ã£o: 1732
+Legendadas: 1531
+Terror: 1308
+4K: 1001
+Suspense: 617
+AnimaÃ§Ã£o/Infantil: 602
+Documentarios: 579
+Romance: 558
+LANÃAMENTOS: 546
+Apple TV Plus: 545
+Globoplay: 428
+Nacionais: 373
+Turcas: 335
+Netflix: 332
+Amazon Prime Video: 284
+Diversos: 264
+Em ExibiÃ§ao: 208
+Guerra: 157
+Legendados: 113
+Faroeste: 109
+Natal: 109
+â ADULTOS (+18) â: 104
+Religiosos: 100
+HBO Max: 91
+Fantasia: 82
+FamÃ­lia: 79
+Outras Produtoras: 63
+ColetÃ¢nia : 62
+Marvel: 54
+FicÃ§Ã£o: 48
+Discovery Plus: 42
+EM CARTAZ [IMAGEM CINEMA]: 30
+Aventura: 26
+2026: 23
+âï¸ TELECINE: 21
+SessÃ£o da Tarde: 19
+âï¸ INFANTIL: 15
+DirecTV: 5
+ReelShorts: 3
+Crime: 2
+âï¸ DESENHOS 24H: 2
+âï¸ NOVELAS 24H: 1
+âï¸ KIDS 24H: 1
+âï¸ SERIES 24H: 1
+âï¸DORAMAS 24H: 1
+Paramount: 1
+Outros Streams: 1
+
+--- SUSPICIOUS CHANNELS (Rejected Movies?) ---
+[âï¸ FILMES 24H] ANIMAÃÃO -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPR1Top7tNVoOWD4u6vqu2nywVZyeD7AstY7RX6kFPAwC
+[âï¸ FILMES 24H] CINE SKY 01 -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPR3-OEqYaJt1cOiDKmGDLDw
+[âï¸ FILMES 24H] CINE SKY 02 -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPZAxIbPYsqPPCfyGF8PVDSQ
+[âï¸ FILMES 24H] CINE SKY 03 -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPVQMrERMJYlE-RovChxfPzE
+[âï¸ FILMES 24H] CINE SKY 04 -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPb__nMF0yLJJ7dnafpO7ou0
+[âï¸ FILMES 24H] CINE SKY 05 -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPdJSiqsVChZ1mbY0BHFRev0
+[âï¸ FILMES 24H] CINE SKY 06 -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPfgD8aSvwaldLGzABnDJIlw
+[âï¸ FILMES 24H] CINE SKY 07 -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPfiK-52uioDAblzG4xSZjGg
+[âï¸ FILMES 24H] COMEDIA -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPXK8hcM2LBtZw0JH611bS-LLeRJ-Cr1fZzsjYgUc5yyM
+[âï¸ FILMES 24H] CORRIDA -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPR1Top7tNVoOWD4u6vqu2nwXyP0yXxN2UsXtkcGpBl12
+[âï¸ FILMES 24H] DC -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPaKARploxDChQyIxtbrWS_lf6iPR0bUnJ0IgJGCaJN8k
+[âï¸ FILMES 24H] ESPECIAL DE NATAL -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPYX4W0lNcCvq2DhTlVrnNmrpCaBoj2ir1VXaCNXIwatY
+[âï¸ FILMES 24H] LUTA -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPR1Top7tNVoOWD4u6vqu2nwbWcEBRZ8nVr0FXBPc0UFz
+[âï¸ FILMES 24H] MARVEL -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPaKARploxDChQyIxtbrWS_k-V3e5h0V6vruU7NDDXBCC
+[âï¸ FILMES 24H] PAIXAO DE CRISTO -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPaulA4aaE9pTfcvZmoF3fMypdwfgFYcfz2YRkUnuml8m
+[âï¸ FILMES 24H] RELIGIOSOS -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPaKARploxDChQyIxtbrWS_l0h0dxoMXHaJc-LVtPHsqr
+[âï¸ FILMES 24H] TERROR -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPa0Fq5VS5vdhNNsj_caW0eGP8fd52YcS3_i2dFLQZpZx
+[TVCINE INTER] TVCINE + HD -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPfvAlupbnlVg4QMogrm0hgOwp_jQN4kUSWRxOs8qxupn
+[TVCINE INTER] TVCINE ACTION HD -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPQSTeOWj855JEXboyuzV0g2OixFR8Fj3F35_qgPEBENP
+[TVCINE INTER] TVCINE EDITION HD -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPfvAlupbnlVg4QMogrm0hgNT5F77Gkh5mwNOQ5hNkR_S
+[TVCINE INTER] TVCINE EMOTION HD -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPfvAlupbnlVg4QMogrm0hgNeHLXlNCAocRUDCvSwSC7R
+[TVCINE INTER] TVCINE TOP HD -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPfvAlupbnlVg4QMogrm0hgNA7nwRRYArkzkEvMrv5D_k
+[âï¸ FILMES 24H] VALE A PENA ASSISTIR -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPYX4W0lNcCvq2DhTlVrnNmo0s3CSOLlodtZFiXlOq0BJ
+[âï¸ FILMES 24H] [24H] CINE MARVEL -> isMovie=false. URL: https://eczx.xyz:8443/play/X-uLEK-qmMoEpd7of8xkPRnKSKuwqi0C29yhTKIIkCBIDgMAfzAyV3ufyzQgQ_sZ
+
+--- TOP 50 CHANNEL GROUPS ---
+âï¸GLOBO SUDESTE: 57
+âï¸ VARIEDADES E MUSICAIS: 46
+âï¸ SERIES 24H: 43
+PORTUGAL: 42
+âï¸GLOBO CAPITAL: 40
+âï¸DORAMAS 24H: 40
+âï¸GLOBO SUL: 40
+âï¸ DOCUMENTÃRIOS: 36
+â½ PREMIERE CLUBE: 35
+âï¸ RECORD: 33
+âï¸ RADIOS: 30
+âï¸ DESENHOS 24H: 29
+â½ESPN: 28
+âï¸ ABERTOS: 26
+âï¸ HBO: 24
+âï¸GLOBO NORDESTE: 23
+âï¸ NOTÃCIAS: 23
+âï¸ SBT: 21
+âï¸ NOVELAS 24H: 20
+âï¸ FILMES 24H: 19
+â½ PAY-PER-VIEW: 19
+â½ DISNEY+: 19
+â½ SPORTS MUNDO: 19
+â½ MAX: 18
+â½ JOGOS AO-VIVO: 18
+âï¸ KIDS 24H: 17
+âï¸ RELIGIOSOS: 14
+â½SPORTV: 13
+âï¸ BAND: 13
+â½ CAZÃTV: 12
+â½PARAMOUNT+: 12
+âï¸ BBB 2026: 12
+âï¸GLOBO NORTE: 10
+â­ UFC: 10
+â½GOAT: 10
+â¹ï¸ââï¸NBA League Pass: 10
+âï¸ INFANTIL: 9
+âï¸ PINKFONG PORTUGUÃS 24H: 9
+âï¸ ANIMES 24H: 9
+â½ SPORTYNET: 8
+â½ESPORTES: 8
+âï¸GLOBO CENTRO-OESTE: 8
+â½ DAZN: 7
+â½ PRIME VIDEO: 7
+â½ ESTADUAIS: 7
+â­ NFL GAME PASS: 6
+âï¸ YOUTUBE 24H: 6
+â½ COPA SP JUNIOR: 5
+TVCINE INTER: 5
+âï¸ PROGRAMAS DE TV 24H: 5

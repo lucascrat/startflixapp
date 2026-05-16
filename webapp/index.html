@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StartFlix | O Melhor do Streaming</title>
+    <link rel="stylesheet" href="./style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Navbar -->
+        <nav class="navbar" id="navbar">
+            <div class="nav-container">
+                <div class="nav-left">
+                    <h1 class="logo">STARTFLIX</h1>
+                    <div class="nav-menu">
+                        <a href="#" class="nav-link active">Início</a>
+                        <a href="#" class="nav-link">Séries</a>
+                        <a href="#" class="nav-link">Filmes</a>
+                        <a href="#" class="nav-link">Bombando</a>
+                        <a href="#" class="nav-link">Minha Lista</a>
+                    </div>
+                </div>
+                <div class="nav-right">
+                    <button class="icon-btn search-trigger"><i data-lucide="search"></i></button>
+                    <button class="icon-btn notification-btn"><i data-lucide="bell"></i></button>
+                    <div class="user-menu" id="user-profile-trigger">
+                        <img src="https://ui-avatars.com/api/?name=User&background=db0000&color=fff" alt="Avatar"
+                            class="nav-avatar">
+                        <i data-lucide="chevron-down" class="chevron"></i>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Hero Section -->
+        <section class="hero" id="hero-banner">
+            <div class="hero-overlay"></div>
+            <div class="hero-content">
+                <span class="hero-tag"><i data-lucide="flame"></i> Top 1 no Brasil hoje</span>
+                <h2 class="hero-title">O Reino de StartFlix</h2>
+                <div class="hero-metadata">
+                    <span class="rating">98% Match</span>
+                    <span>2024</span>
+                    <span class="age-badge">16+</span>
+                    <span>4 Temporadas</span>
+                    <span class="hd-badge">4K Ultra HD</span>
+                </div>
+                <p class="hero-description">
+                    Em um futuro onde o entretenimento é a única moeda que importa, um grupo de desenvolvedores
+                    cria a plataforma definitiva para livrar o mundo do tédio. A aventura começa agora.
+                </p>
+                <div class="hero-actions">
+                    <button class="btn btn-play"><i data-lucide="play"></i> Assistir</button>
+                    <button class="btn btn-info"><i data-lucide="info"></i> Mais Informações</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Content Rows -->
+        <main class="main-content">
+            <section class="row">
+                <h3 class="row-title">Populares na StartFlix</h3>
+                <div class="row-posters" id="popular-movies">
+                    <!-- Dynamic posters here -->
+                </div>
+            </section>
+
+            <section class="row">
+                <h3 class="row-title">Continuar Assistindo</h3>
+                <div class="row-posters" id="continue-watching">
+                    <!-- Dynamic posters here -->
+                </div>
+            </section>
+
+            <section class="row">
+                <h3 class="row-title">Minha Lista</h3>
+                <div class="row-posters" id="my-list">
+                    <!-- Dynamic posters here -->
+                </div>
+            </section>
+        </main>
+
+        <!-- Plans Section (Overlay for Guest) -->
+        <section class="plans-section" id="plans-section">
+            <div class="section-header">
+                <h2>Planos de Assinatura</h2>
+                <p>Escolha o plano ideal e comece a maratonar hoje mesmo.</p>
+            </div>
+            <div class="plans-grid" id="plans-grid">
+                <!-- Dynamic plans here -->
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-links">
+                <div class="footer-column">
+                    <a href="#">Privacidade</a>
+                    <a href="#">Termos de Uso</a>
+                    <a href="#">Ajuda</a>
+                </div>
+                <div class="footer-column">
+                    <a href="#">Dispositivos</a>
+                    <a href="#">Planos</a>
+                    <a href="#">Sobre Nós</a>
+                </div>
+                <div class="footer-column">
+                    <p>Fale Conosco: suporte@startflix.app</p>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <span>&copy; 2026 StartFlix Inc. Todos os direitos reservados.</span>
+                <!-- Discrete Admin Button -->
+                <a href="/admin" class="admin-access-btn" id="admin-btn">
+                    <i data-lucide="shield"></i>
+                </a>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="./main.js"></script>
+</body>
+
+</html>

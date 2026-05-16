@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#e50914">
+  <title>StartFlix Admin | Dashboard</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="https://ui-avatars.com/api/?name=SF&background=e50914&color=fff&size=180">
+  <script type="module" crossorigin src="/assets/index-BtLUS5RO.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DC6ySsU5.css">
+</head>
+
+<body>
+  <div id="app" class="app-container">
+    <!-- Mobile Logout Button -->
+    <button class="mobile-logout btn-icon" id="mobile-logout-btn">
+      <i data-lucide="log-out" style="color: white;"></i>
+    </button>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-text">STARTFLIX</span>
+      </div>
+
+      <nav class="nav-links">
+        <div class="nav-item">
+          <a href="#" class="nav-link active" data-page="dashboard">
+            <i data-lucide="layout-dashboard"></i>
+            Dashboard
+          </a>
+        </div>
+        <div class="nav-item">
+          <a href="#" class="nav-link" data-page="users">
+            <i data-lucide="users"></i>
+            Clientes
+          </a>
+        </div>
+        <div class="nav-item">
+          <a href="#" class="nav-link" data-page="payments">
+            <i data-lucide="credit-card"></i>
+            Pagamentos
+          </a>
+        </div>
+        <div class="nav-item">
+          <a href="#" class="nav-link" data-page="apps">
+            <i data-lucide="monitor"></i>
+            Apps dos Clientes
+          </a>
+        </div>
+        <div class="nav-item">
+          <a href="#" class="nav-link" data-page="plans">
+            <i data-lucide="package"></i>
+            Planos e Preços
+          </a>
+        </div>
+        <div class="nav-item">
+          <a href="#" class="nav-link" data-page="inventory">
+            <i data-lucide="zap"></i>
+            Estoque / Mídia
+          </a>
+        </div>
+        <div class="nav-item">
+          <a href="#" class="nav-link" data-page="settings">
+            <i data-lucide="settings"></i>
+            Configurações
+          </a>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="#" class="nav-link" id="logout-btn">
+          <i data-lucide="log-out"></i>
+          Sair
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <header class="header animate-fade-in">
+        <div class="header-left">
+          <h1 id="page-title">Dashboard</h1>
+          <p class="stat-label">Bem-vindo ao centro de controle StartFlix.</p>
+        </div>
+
+        <div class="user-profile">
+          <img src="https://ui-avatars.com/api/?name=Admin&background=e50914&color=fff" alt="Admin" class="avatar">
+          <span class="admin-name">Administrador</span>
+        </div>
+      </header>
+
+      <div id="content-area" class="animate-fade-in">
+        <!-- Dashboard Home Content -->
+        <div id="dashboard-view">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-header">
+                <div class="stat-icon"><i data-lucide="users"></i></div>
+              </div>
+              <div class="stat-value" id="total-users">0</div>
+              <div class="stat-label">Total de Clientes</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-header">
+                <div class="stat-icon" style="background: rgba(34, 197, 94, 0.1); color: #22c55e;"><i
+                    data-lucide="dollar-sign"></i></div>
+              </div>
+              <div class="stat-value" id="total-revenue">R$ 0,00</div>
+              <div class="stat-label">Receita (Mês Atual)</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-header">
+                <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;"><i
+                    data-lucide="zap"></i></div>
+              </div>
+              <div class="stat-value" id="active-subs">0</div>
+              <div class="stat-label">Clientes Ativos</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-header">
+                <div class="stat-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;"><i
+                    data-lucide="alert-circle"></i></div>
+              </div>
+              <div class="stat-value" id="expired-subs">0</div>
+              <div class="stat-label">Clientes Vencidos</div>
+            </div>
+          </div>
+
+          <div class="dashboard-grid">
+            <div class="chart-container">
+              <div class="table-header" style="padding: 0 0 1.5rem 0; background: transparent;">
+                <h3>Crescimento de Receita</h3>
+                <span class="stat-label">Últimos 7 dias</span>
+              </div>
+              <div class="chart-wrapper">
+                <canvas id="revenueChart"></canvas>
+              </div>
+            </div>
+
+            <div class="data-table-container">
+              <div class="table-header">
+                <h3>Últimos Pix</h3>
+                <button class="btn btn-ghost btn-icon" id="refresh-payments">
+                  <i data-lucide="refresh-cw"></i>
+                </button>
+              </div>
+              <table id="recent-payments-table">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Valor</th>
+                    <th>Ref.</th>
+                  </tr>
+                </thead>
+                <tbody id="payments-list"></tbody>
+              </table>
+              <div style="padding: 1rem; text-align: center;">
+                <a href="#" class="nav-link" style="justify-content: center; font-size: 0.8rem;"
+                  data-page="payments">Ver tudo</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dynamic Content -->
+        <div id="dynamic-content"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal: Novo/Editar Cliente -->
+  <div id="user-modal" class="modal-overlay" style="display: none;">
+    <div class="modal" style="max-width: 600px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
+        <h2 id="user-modal-title">Novo Cliente</h2>
+        <button class="btn" style="background: transparent;"
+          onclick="document.getElementById('user-modal').style.display='none'">&times;</button>
+      </div>
+      <form id="user-form">
+        <input type="hidden" id="user-id">
+        <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="input-group">
+            <label>Usuário / Email</label>
+            <input type="text" id="user-email" required placeholder="ex: cliente01">
+          </div>
+          <div class="input-group">
+            <label>Senha</label>
+            <input type="text" id="user-password-field" placeholder="••••••••">
+          </div>
+        </div>
+        <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="input-group">
+            <label>Nome Completo</label>
+            <input type="text" id="user-name" required>
+          </div>
+          <div class="input-group">
+            <label>WhatsApp / Telefone</label>
+            <input type="text" id="user-phone" placeholder="5511999999999">
+          </div>
+        </div>
+        <div class="input-group">
+          <label>URL da Lista M3U</label>
+          <input type="text" id="user-m3u" placeholder="https://...">
+        </div>
+        <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="input-group">
+            <label>App Designado</label>
+            <select id="user-app-id">
+              <option value="">Nenhum (Usar Padrão)</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Custom App Image URL</label>
+            <input type="text" id="user-app-image" placeholder="https://...">
+          </div>
+        </div>
+        <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="input-group">
+            <label>Data de Expiração</label>
+            <input type="date" id="user-expiry">
+          </div>
+          <div class="input-group">
+            <label>Status</label>
+            <select id="user-status">
+              <option value="true">Ativo</option>
+              <option value="false">Inativo</option>
+            </select>
+          </div>
+        </div>
+
+        <div
+          style="margin: 1rem 0; padding: 1rem; background: rgba(34, 197, 94, 0.05); border-radius: 16px; border: 1px dashed rgba(34, 197, 94, 0.3);">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="user-has-signal" style="width: 20px; height: 20px; accent-color: #22c55e;">
+            <label for="user-has-signal"
+              style="margin-bottom: 0; cursor: pointer; color: #4ade80; font-weight: bold;">Liberar Sinal de TV
+              (Automático do Estoque)</label>
+          </div>
+          <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.5rem; margin-left: 30px;">
+            Ative para que este cliente utilize uma das listas M3U disponíveis no seu estoque de contas de mídia.
+          </p>
+        </div>
+
+        <!-- TV App Configuration -->
+        <div
+          style="margin: 1.5rem 0; padding: 1.5rem; background: rgba(255,255,255,0.02); border-radius: 16px; border: 1px dashed var(--border);">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1.5rem;">
+            <input type="checkbox" id="user-tv-enabled" style="width: 20px; height: 20px;">
+            <label for="user-tv-enabled" style="margin-bottom: 0; cursor: pointer;">Habilitar Configurações de
+              TV</label>
+          </div>
+
+          <div id="tv-fields" style="display: none;">
+            <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div class="input-group">
+                <label>App de TV (Ex: Smart STB, Duplex)</label>
+                <input type="text" id="user-tv-app-name" placeholder="Nome do App">
+              </div>
+              <div class="input-group">
+                <label>URL Imagem do App (Ícone)</label>
+                <input type="text" id="user-tv-app-image" placeholder="https://...">
+              </div>
+            </div>
+
+            <div class="input-group">
+              <label>Tipo de Autenticação</label>
+              <select id="user-tv-auth-type">
+                <option value="mac">Por código MAC / ID</option>
+                <option value="email">Por E-mail / Usuário</option>
+              </select>
+            </div>
+
+            <div id="tv-auth-mac" class="stats-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+              <div class="input-group">
+                <label>MAC Address / ID</label>
+                <input type="text" id="user-tv-mac" placeholder="00:00:00...">
+              </div>
+              <div class="input-group">
+                <label>Usuário App</label>
+                <input type="text" id="user-tv-user" placeholder="Login">
+              </div>
+              <div class="input-group">
+                <label>Senha App</label>
+                <input type="text" id="user-tv-pass" placeholder="Senha">
+              </div>
+            </div>
+
+            <div id="tv-auth-email" class="stats-grid"
+              style="grid-template-columns: 1fr 1fr; gap: 1rem; display: none;">
+              <div class="input-group" style="grid-column: span 1;">
+                <label>E-mail App</label>
+                <input type="email" id="user-tv-email" placeholder="email@tv.com">
+              </div>
+              <div class="input-group" style="grid-column: span 1;">
+                <label>Senha App</label>
+                <input type="text" id="user-tv-pass-email" placeholder="Senha">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+          <button type="submit" class="btn btn-primary" style="flex: 1; justify-content: center;">Salvar
+            Cliente</button>
+          <button type="button" class="btn" style="background: #333;"
+            onclick="document.getElementById('user-modal').style.display='none'">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Nova Lista/App -->
+  <div id="app-modal" class="modal-overlay" style="display: none;">
+    <div class="modal" style="max-width: 500px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
+        <h2 id="app-modal-title">Configurar App/Serviço</h2>
+        <button class="btn" style="background: transparent;"
+          onclick="document.getElementById('app-modal').style.display='none'">&times;</button>
+      </div>
+      <form id="app-form">
+        <input type="hidden" id="app-id-field">
+        <div class="input-group">
+          <label>Nome do App/Lista</label>
+          <input type="text" id="app-name" required placeholder="ex: StartFlix TV">
+        </div>
+        <div class="input-group">
+          <label>URL da Imagem (Banner/Logo)</label>
+          <input type="text" id="app-image-url" placeholder="https://.../logo.png">
+        </div>
+        <div class="input-group">
+          <label>URL (M3U ou APK de download)</label>
+          <input type="text" id="app-url" required placeholder="https://...">
+        </div>
+        <div class="input-group">
+          <label>Tipo</label>
+          <select id="app-type">
+            <option value="url">Lista M3U Padrão</option>
+            <option value="app">Aplicativo (APK/Legacy)</option>
+            <option value="xtream">Painel Xtream Codes</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">Salvar
+          Configuração</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Planos -->
+  <div id="plan-modal" class="modal-overlay" style="display: none;">
+    <div class="modal" style="max-width: 500px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
+        <h2 id="plan-modal-title">Gerenciar Plano</h2>
+        <button class="btn" style="background: transparent;"
+          onclick="document.getElementById('plan-modal').style.display='none'">&times;</button>
+      </div>
+      <form id="plan-form">
+        <input type="hidden" id="plan-id">
+        <div class="input-group">
+          <label>Nome do Plano</label>
+          <input type="text" id="plan-name" required placeholder="ex: Plano Mensal">
+        </div>
+        <div class="input-group">
+          <label>Preço (R$)</label>
+          <input type="number" step="0.01" id="plan-price" required placeholder="29.90">
+        </div>
+        <div class="input-group">
+          <label>Duração (Dias)</label>
+          <input type="number" id="plan-days" required placeholder="30">
+        </div>
+        <div class="input-group">
+          <label>Descrição</label>
+          <input type="text" id="plan-desc" placeholder="ex: Acesso completo por 30 dias">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">Salvar
+          Plano</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Login Modal (Hidden by Bypass) -->
+  <div id="login-overlay" class="modal-overlay" style="display: none;">
+    <div class="modal">
+      <h2 style="margin-bottom: 2rem; text-align: center;">STARTFLIX ADMIN</h2>
+      <form id="login-form">
+        <div class="input-group">
+          <label>Usuário</label>
+          <input type="text" id="login-username" placeholder="admin" required>
+        </div>
+        <div class="input-group">
+          <label>Senha</label>
+          <input type="password" id="login-password" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">Entrar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts: Chart.js e Lucide -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Inventory Modal -->
+  <div id="inventory-modal" class="modal-overlay">
+    <div class="modal animate-scale-up">
+      <h3>Adicionar ao Estoque</h3>
+      <form id="inv-form" onsubmit="handleInventorySubmit(event)">
+        <div class="input-group">
+          <label>Fornecedor (Opção)</label>
+          <input type="text" id="inv-provider" placeholder="Ex: Unitv, P2P, Play..." required>
+        </div>
+        <div class="input-group">
+          <label>Usuário</label>
+          <input type="text" id="inv-user" placeholder="Usuário da Lista" required>
+        </div>
+        <div class="input-group">
+          <label>Senha</label>
+          <input type="text" id="inv-pass" placeholder="Senha da Lista" required>
+        </div>
+        <div class="input-group">
+          <label>DNS / URL (Opcional)</label>
+          <input type="text" id="inv-dns" placeholder="http://...">
+        </div>
+        <div class="input-group" style="display: flex; gap: 1rem; justify-content: flex-end;">
+          <button type="button" class="btn btn-ghost"
+            onclick="document.getElementById('inventory-modal').style.display='none'">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Assign Modal -->
+  <div id="assign-modal" class="modal-overlay" style="display: none;">
+    <div class="modal animate-scale-up" style="max-width: 400px;">
+      <h3>Vincular Conta a Cliente</h3>
+      <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1.5rem;">Selecione o cliente que receberá esta
+        conta de IPTV.</p>
+      <form id="assign-form">
+        <input type="hidden" id="assign-account-id">
+        <div class="input-group">
+          <label>Selecione o Cliente</label>
+          <select id="assign-user-id" required
+            style="width: 100%; padding: 0.8rem; background: #222; border: 1px solid var(--border); color: white; border-radius: 8px;">
+            <option value="">Carregando clientes...</option>
+          </select>
+        </div>
+        <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+          <button type="submit" class="btn btn-primary" style="flex: 1; justify-content: center;">Confirmar
+            Vínculo</button>
+          <button type="button" class="btn btn-ghost"
+            onclick="document.getElementById('assign-modal').style.display='none'">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('SW registered!', reg))
+          .catch(err => console.log('SW registration failed:', err));
+      });
+    }
+  </script>
+</body>
+
+</html>
