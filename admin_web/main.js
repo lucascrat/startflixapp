@@ -1699,7 +1699,7 @@ async function renderSettingsView() {
 
   // Load current settings
   try {
-    const { data, error } = await supabase.from('system_settings').select('value').eq('id', 'ad_config').single();
+    const { data, error } = await supabase.from('admin_settings').select('value').eq('key', 'ad_config').maybeSingle();
     if (data) {
       document.getElementById('ad-reward-duration').value = data.value.reward_duration_minutes || 90;
     }
@@ -1713,11 +1713,11 @@ window.handleSettingsSubmit = async (e) => {
   const duration = parseInt(document.getElementById('ad-reward-duration').value);
 
   try {
-    const { error } = await supabase.from('system_settings').upsert({
-      id: 'ad_config',
+    const { error } = await supabase.from('admin_settings').upsert({
+      key: 'ad_config',
       value: { reward_duration_minutes: duration },
       updated_at: new Date().toISOString()
-    });
+    }, { onConflict: 'key' });
 
     if (error) throw error;
     showToast("Configurações salvas com sucesso!", "success");
