@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants.dart';
+import 'core/custom_http_client.dart';
+
 import 'screens/main_tab_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/plans_screen.dart';
@@ -41,6 +43,7 @@ Future<void> main() async {
     await Supabase.initialize(
       url: AppConstants.supabaseUrl,
       anonKey: AppConstants.supabaseAnonKey,
+      httpClient: CustomHttpClient(),
     );
     isSupabaseInitialized = true;
   }
