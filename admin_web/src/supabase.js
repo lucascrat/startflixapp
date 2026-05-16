@@ -242,7 +242,13 @@ export const supabase = {
       const r = await new QueryBuilder('profiles', DEFAULT_SCHEMA)
         .insert({ id, email, role: 'client', is_active: true })
         ._execute();
-      if (r.error) return { data: null, error: r.error };
+      if (r.error) {
+        // Friendlier message for the most common failure
+        if (r.error.code === '23505' || /duplicate key/i.test(r.error.message || '')) {
+          return { data: null, error: { ...r.error, message: `Já existe um cliente com o email ${email}.` } };
+        }
+        return { data: null, error: r.error };
+      }
       const row = Array.isArray(r.data) ? r.data[0] : r.data;
       return { data: { user: { id: (row && row.id) || id, email } }, error: null };
     },
