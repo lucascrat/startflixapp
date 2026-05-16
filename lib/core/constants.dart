@@ -9,9 +9,9 @@ class AppColors {
 
 class AppConstants {
   // TODO: Substitua pelas suas credenciais do Supabase
-  static const String supabaseUrl = 'https://qyagfghcnzenvbhbtsvd.supabase.co';
+  static const String supabaseUrl = 'http://g118gaedeyy792j9l0t7hbzc.84.247.138.242.sslip.io';
   static const String supabaseAnonKey =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5YWdmZ2hjbnplbnZiaGJ0c3ZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3NDU2NjksImV4cCI6MjA4MzMyMTY2OX0.k_cVE7tLn23NIuuMJlCdWw97F_ZkPpz7SS7d-MleJVc';
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc4OTQ1MDQ4LCJleHAiOjIwOTQzMDUwNDh9.MP2-5TXurfkLspwA_3vft9g6nIY8sUHOBaqxPfkaKBg';
 
   // URL do serviço de pagamento (VPS)
   // Ajuste o protocolo (http/https) e a porta conforme configuração da VPS

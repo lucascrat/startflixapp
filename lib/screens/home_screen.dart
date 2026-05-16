@@ -61,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   bool _isBlocked = false;
   String _blockMessage = '';
+  bool _isJustRewarded = false; // Flag to allow immediate access after ad
 
   @override
   void initState() {
@@ -98,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen>
       onRewardEarned: (reward) async {
         final user = AuthService().currentUser;
         if (user != null) {
-          final newRewardTime = DateTime.now().add(const Duration(hours: 6)); // Increased to 6h for better reward
+          final newRewardTime = DateTime.now().add(const Duration(hours: 6)); 
           await AuthService().updateProfile(
             id: user.id,
             rewardedUntil: newRewardTime,
@@ -107,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen>
           if (mounted) {
             setState(() {
               _isBlocked = false;
+              _isJustRewarded = true; // Temporary bypass
             });
           }
         }
@@ -246,11 +248,11 @@ class _HomeScreenState extends State<HomeScreen>
           );
           // Proceed loading m3u
         } else {
-          final DateTime rewardedUntil = DateTime.parse(rewardedUntilStr);
-          if (rewardedUntil.isBefore(DateTime.now())) {
+          final DateTime rewardedUntil = DateTime.parse(rewardedUntilStr).toUtc();
+          if (rewardedUntil.isBefore(DateTime.now().toUtc())) {
             // Reward expired! 
             // We no longer block here. We allow them to browse, but block playback.
-            print("HomeScreen: User reward expired, allowing browse but will block playback.");
+            print("HomeScreen: User reward expired at $rewardedUntil, allowing browse but will block playback.");
           }
         }
       }
@@ -867,10 +869,10 @@ class _HomeScreenState extends State<HomeScreen>
 
       // Check if subscription or reward is active
       final bool isPaidActive = profile['expiration_date'] != null &&
-          DateTime.parse(profile['expiration_date']).isAfter(DateTime.now());
+          DateTime.parse(profile['expiration_date']).toUtc().isAfter(DateTime.now().toUtc());
 
-      final bool isRewardActive = profile['rewarded_until'] != null &&
-          DateTime.parse(profile['rewarded_until']).isAfter(DateTime.now());
+      final bool isRewardActive = (profile['rewarded_until'] != null &&
+          DateTime.parse(profile['rewarded_until']).toUtc().isAfter(DateTime.now().toUtc())) || _isJustRewarded;
 
       if (!isPaidActive && !isRewardActive) {
         // Access expired! Show floating card (dialog)
@@ -1015,8 +1017,13 @@ class _HomeScreenState extends State<HomeScreen>
             id: user.id,
             rewardedUntil: newRewardTime,
           );
-          // Reward earned, we can set loading to false in next step
-          print('Reward earned and profile updated for user ${user.id}');
+          // Reward earned, update local state immediately
+          if (mounted) {
+            setState(() {
+              _isJustRewarded = true;
+            });
+          }
+          print('Reward earned and profile updated for user ${user.id}. Access granted until $newRewardTime');
         }
       },
       onAdClosed: () async {
