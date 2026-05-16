@@ -14,5 +14,8 @@ const customFetch = (url, options) => {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
     fetch: customFetch
+  },
+  db: {
+    schema: 'startflix'
   }
 })

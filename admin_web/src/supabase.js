@@ -5,6 +5,7 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbi
 
 const customFetch = (url, options) => {
   if (typeof url === 'string') {
+    // PostgREST handles the path at root, but Supabase-js appends /rest/v1
     url = url.replace('/rest/v1/', '/');
     url = url.replace('/rest/v1', '');
   }
@@ -14,9 +15,8 @@ const customFetch = (url, options) => {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
     fetch: customFetch
+  },
+  db: {
+    schema: 'startflix'
   }
-})
-    db: {
-        schema: 'startflix'
-    }
 })
