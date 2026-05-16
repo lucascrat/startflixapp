@@ -134,6 +134,36 @@
               <div class="stat-value" id="expired-subs">0</div>
               <div class="stat-label">Clientes Vencidos</div>
             </div>
+
+            <div class="stat-card">
+              <div class="stat-header">
+                <div class="stat-icon" style="background: rgba(168, 85, 247, 0.1); color: #a855f7;"><i
+                    data-lucide="play"></i></div>
+              </div>
+              <div class="stat-value" id="watching-now">0</div>
+              <div class="stat-label">Assistindo Agora</div>
+            </div>
+          </div>
+
+          <div class="data-table-container" style="margin-bottom: 2rem;">
+            <div class="table-header">
+              <h3>Quem está assistindo agora</h3>
+              <span class="stat-label">Atualiza a cada 30s · só conta usuários com player ativo</span>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Canal</th>
+                  <th>Lista (DNS)</th>
+                  <th>Tempo</th>
+                  <th>Último heartbeat</th>
+                </tr>
+              </thead>
+              <tbody id="active-streams-list">
+                <tr><td colspan="5" style="text-align:center; padding: 1.5rem; color: var(--text-dim);">Ninguém assistindo no momento.</td></tr>
+              </tbody>
+            </table>
           </div>
 
           <div class="dashboard-grid">

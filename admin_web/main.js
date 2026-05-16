@@ -483,10 +483,68 @@ async function loadDashboardData() {
     // Initialize/Update Chart
     initRevenueChart(payments);
 
+    // Active streams (who's actually watching right now)
+    await loadActiveStreams();
+
   } catch (err) {
     console.error("Erro dashboard:", err);
     showToast("Erro ao carrergar dados do dashboard: " + err.message, "error");
   }
+}
+
+async function loadActiveStreams() {
+  try {
+    const { data, error } = await supabase
+      .from('vw_active_streams')
+      .select('*')
+      .order('started_at', { ascending: false });
+    if (error) throw error;
+
+    const rows = data || [];
+    document.getElementById('watching-now').innerText = rows.length;
+
+    const tbody = document.getElementById('active-streams-list');
+    if (!tbody) return;
+
+    if (rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 1.5rem; color: var(--text-dim);">Ninguém assistindo no momento.</td></tr>';
+      return;
+    }
+
+    const fmtDuration = (s) => {
+      const m = Math.floor(s / 60), r = s % 60;
+      return m > 0 ? `${m}m ${r}s` : `${r}s`;
+    };
+
+    tbody.innerHTML = rows.map(s => `
+      <tr>
+        <td>
+          <strong>${s.full_name || '—'}</strong><br>
+          <span style="font-size: 0.75rem; color: var(--text-dim);">${s.email || ''}</span>
+        </td>
+        <td>${s.channel_name || s.channel_id || '<span style="color: var(--text-dim);">—</span>'}</td>
+        <td>
+          <span style="font-size: 0.85rem;">${s.provider_name || '—'}</span><br>
+          <span style="font-size: 0.7rem; color: var(--text-dim); font-family: monospace;">${s.account_username || ''}</span>
+        </td>
+        <td>${fmtDuration(s.watching_seconds || 0)}</td>
+        <td>
+          <span style="color: ${s.seconds_since_heartbeat < 60 ? '#22c55e' : '#f59e0b'};">
+            ${s.seconds_since_heartbeat}s atrás
+          </span>
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    console.error('Active streams error:', err);
+  }
+}
+
+// Auto-refresh the live "watching now" panel while the dashboard is open
+if (!window.__activeStreamsTimer) {
+  window.__activeStreamsTimer = setInterval(() => {
+    if (state.activePage === 'dashboard') loadActiveStreams();
+  }, 30000);
 }
 
 function initRevenueChart(payments) {
