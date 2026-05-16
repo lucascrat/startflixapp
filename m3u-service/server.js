@@ -105,7 +105,10 @@ async function handleM3U(req, res, pathname) {
 
   let upstreamRes;
   try {
-    upstreamRes = await fetch(upstream, { headers: { 'User-Agent': TV_USER_AGENT } });
+    upstreamRes = await fetch(upstream, {
+      headers: { 'User-Agent': TV_USER_AGENT },
+      redirect: 'follow',
+    });
   } catch (err) {
     console.error('[fetch]', err.message);
     res.writeHead(200, { ...CORS, 'Content-Type': 'text/plain' });
@@ -113,33 +116,36 @@ async function handleM3U(req, res, pathname) {
     return;
   }
 
+  console.log(`[upstream] status=${upstreamRes.status} content-length=${upstreamRes.headers.get('content-length') || '-'} content-type=${upstreamRes.headers.get('content-type') || '-'}`);
+
+  // Buffer the upstream playlist fully and send it back. M3U files are text
+  // (a few MB at most for full lineups), so streaming buys nothing and Cloudflare
+  // behaves better with a known Content-Length than with a chunked stream.
+  let body;
+  try {
+    body = Buffer.from(await upstreamRes.arrayBuffer());
+  } catch (err) {
+    console.error('[buffer]', err.message);
+    res.writeHead(200, { ...CORS, 'Content-Type': 'text/plain' });
+    res.end(errorM3U('ERRO AO LER PLAYLIST'));
+    return;
+  }
+  console.log(`[upstream] body bytes=${body.length}`);
+
+  if (!upstreamRes.ok || body.length === 0) {
+    res.writeHead(200, { ...CORS, 'Content-Type': 'text/plain' });
+    return res.end(errorM3U(`UPSTREAM ${upstreamRes.status}`));
+  }
+
   res.writeHead(200, {
     ...CORS,
     'Content-Type': 'application/vnd.apple.mpegurl',
+    'Content-Length': body.length,
     'Content-Disposition': 'inline; filename="playlist.m3u8"',
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Access-Control-Expose-Headers': 'Content-Disposition',
   });
-
-  if (!upstreamRes.body) {
-    res.end(errorM3U('ERRO DE CONEXAO AO SERVIDOR'));
-    return;
-  }
-
-  const reader = upstreamRes.body.getReader();
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!res.write(Buffer.from(value))) {
-        await new Promise(r => res.once('drain', r));
-      }
-    }
-  } catch (err) {
-    console.error('[stream]', err.message);
-  } finally {
-    res.end();
-  }
+  res.end(body);
 }
 
 const server = http.createServer(async (req, res) => {
