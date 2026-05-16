@@ -813,9 +813,9 @@ function renderUserGrid(usersList) {
                    <div style="font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.05em;">Link M3U (Para IBO Player / SS IPTV)</div>
                    <div style="display: flex; gap: 0.5rem; align-items: center;">
                        <div style="font-family: monospace; font-size: 0.75rem; color: var(--primary-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px;">
-                           https://qyagfghcnzenvbhbtsvd.supabase.co/functions/v1/get-m3u/${u.id}.m3u
+                           https://m3ustartflix.appbr.pro/${u.id}.m3u
                        </div>
-                       <button class="btn-icon-small" title="Copiar Link" onclick="navigator.clipboard.writeText('https://qyagfghcnzenvbhbtsvd.supabase.co/functions/v1/get-m3u/${u.id}.m3u'); showToast('🔗 Link M3U copiado!', 'success');">
+                       <button class="btn-icon-small" title="Copiar Link" onclick="navigator.clipboard.writeText('https://m3ustartflix.appbr.pro/${u.id}.m3u'); showToast('🔗 Link M3U copiado!', 'success');">
                            <i data-lucide="copy" style="width: 14px;"></i>
                        </button>
                    </div>
@@ -936,9 +936,9 @@ async function renderInventoryView() {
           </div>
           <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); flex: 1; display: flex; align-items: center; gap: 1rem;">
               <div style="font-family: monospace; font-size: 0.85rem; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
-                https://qyagfghcnzenvbhbtsvd.supabase.co/functions/v1/get-m3u/master.m3u
+                https://m3ustartflix.appbr.pro/master.m3u
               </div>
-              <button class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText('https://qyagfghcnzenvbhbtsvd.supabase.co/functions/v1/get-m3u/master.m3u'); showToast('🔗 Link Master Copiado!', 'success');">
+              <button class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText('https://m3ustartflix.appbr.pro/master.m3u'); showToast('🔗 Link Master Copiado!', 'success');">
                 <i data-lucide="copy" style="width: 16px;"></i> Copiar
               </button>
           </div>
