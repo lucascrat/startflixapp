@@ -27,18 +27,60 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _featuredItem;
 
+  final M3uService _m3uService = M3uService();
+  Set<String> _availableTitles = {};
+  // Memoized availability: computed once per normalized title, not on every rebuild.
+  final Map<String, bool> _availabilityCache = {};
+
+  bool _isAvailable(String title) {
+    if (title.isEmpty) return false;
+    final normalized = M3uService.normalizeTitle(title);
+    return _availabilityCache.putIfAbsent(normalized, () {
+      return _availableTitles.any((it) {
+        if (it.contains(normalized) || normalized.contains(it)) return true;
+        final words = normalized.split(' ').where((w) => w.length > 3).toList();
+        if (words.length >= 2) return words.every((w) => it.contains(w));
+        return false;
+      });
+    });
+  }
+
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadStaleFromMemory(); // Show cached content instantly, no spinner
+    _loadData();            // Refresh in background, updates UI when done
   }
 
-  final M3uService _m3uService = M3uService();
-  List<String> _availableTitles = [];
+  /// Populate state from static in-memory cache synchronously.
+  /// This means users see content immediately on revisit or when data is fresh.
+  void _loadStaleFromMemory() {
+    final trending = TmdbService.getStaleResults(
+        'https://api.themoviedb.org/3/trending/movie/day?language=pt-BR');
+    if (trending.isEmpty) return; // Nothing cached yet — _loadData will show spinner
+    setState(() {
+      _trendingMovies = trending;
+      _trendingTv = TmdbService.getStaleResults(
+          'https://api.themoviedb.org/3/trending/tv/day?language=pt-BR');
+      _popularMovies = TmdbService.getStaleResults(
+          'https://api.themoviedb.org/3/movie/popular?language=pt-BR&region=BR');
+      _topRatedMovies = TmdbService.getStaleResults(
+          'https://api.themoviedb.org/3/movie/top_rated?language=pt-BR&region=BR');
+      _topRatedTv = TmdbService.getStaleResults(
+          'https://api.themoviedb.org/3/tv/top_rated?language=pt-BR');
+      _nowPlaying = TmdbService.getStaleResults(
+          'https://api.themoviedb.org/3/movie/now_playing?language=pt-BR&region=BR');
+      _upcoming = TmdbService.getStaleResults(
+          'https://api.themoviedb.org/3/movie/upcoming?language=pt-BR&region=BR');
+      _featuredItem = trending.isNotEmpty ? trending[0] : null;
+      _isLoading = false;
+    });
+  }
 
   Future<void> _loadData() async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+    // Show spinner only on first load (no stale data available yet)
+    if (_trendingMovies.isEmpty) setState(() => _isLoading = true);
 
     final results = await Future.wait([
       _tmdbService.getTrendingMovies(),
@@ -52,6 +94,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     ]);
 
     if (!mounted) return;
+
+    // Clear memoized availability so it's recomputed with new M3U titles
+    _availabilityCache.clear();
+
     setState(() {
       _trendingMovies = results[0] as List<Map<String, dynamic>>;
       _trendingTv = results[1] as List<Map<String, dynamic>>;
@@ -60,13 +106,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       _topRatedTv = results[4] as List<Map<String, dynamic>>;
       _nowPlaying = results[5] as List<Map<String, dynamic>>;
       _upcoming = results[6] as List<Map<String, dynamic>>;
-      _availableTitles = results[7] as List<String>;
-
-      // Featured item from trending
-      if (_trendingMovies.isNotEmpty) {
-        _featuredItem = _trendingMovies[0];
-      }
-
+      _availableTitles = Set<String>.from(results[7] as List<String>);
+      if (_trendingMovies.isNotEmpty) _featuredItem = _trendingMovies[0];
       _isLoading = false;
     });
   }
@@ -601,18 +642,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     final title = item['title'] ?? item['name'] ?? '';
     final rating = (item['vote_average'] ?? 0).toDouble();
 
-    final normalized = M3uService.normalizeTitle(title);
-    final isAvailable = _availableTitles.any((it) {
-      if (it.contains(normalized) || normalized.contains(it)) return true;
-      final tmdbWords = normalized
-          .split(' ')
-          .where((w) => w.length > 3)
-          .toList();
-      if (tmdbWords.length >= 2) {
-        return tmdbWords.every((word) => it.contains(word));
-      }
-      return false;
-    });
+    final isAvailable = _isAvailable(title);
 
     return GestureDetector(
       onTap: () => _openDetails(item, isMovie),

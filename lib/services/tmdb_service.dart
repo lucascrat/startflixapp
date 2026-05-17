@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -8,13 +9,14 @@ class TmdbService {
   static const String _baseUrl = 'https://api.themoviedb.org/3';
   static const String imageBaseUrl = 'https://image.tmdb.org/t/p';
 
-  // Image sizes
-  static String getPosterUrl(String? path, {String size = 'w500'}) {
+  // Poster: w342 is enough for 130px cards. w500 wastes bandwidth.
+  // Backdrop: w1280 is full-HD quality. 'original' can be 4–8 MB per image.
+  static String getPosterUrl(String? path, {String size = 'w342'}) {
     if (path == null || path.isEmpty) return '';
     return '$imageBaseUrl/$size$path';
   }
 
-  static String getBackdropUrl(String? path, {String size = 'original'}) {
+  static String getBackdropUrl(String? path, {String size = 'w1280'}) {
     if (path == null || path.isEmpty) return '';
     return '$imageBaseUrl/$size$path';
   }
@@ -24,63 +26,69 @@ class TmdbService {
     'Content-Type': 'application/json',
   };
 
-  // In-memory cache
+  // In-memory cache — static so it persists across screen visits
   static final Map<String, dynamic> _cache = {};
   static const Duration _cacheDuration = Duration(hours: 12);
   static final Map<String, DateTime> _cacheTime = {};
 
+  // SharedPreferences singleton — avoids repeated async getInstance() per fetch
+  static SharedPreferences? _prefs;
+  static Future<SharedPreferences> _getPrefs() async =>
+      _prefs ??= await SharedPreferences.getInstance();
+
+  /// Returns the raw cached payload for [url] synchronously (may be stale).
+  /// Used by DiscoverScreen to show content instantly before the network refresh.
+  static List<Map<String, dynamic>> getStaleResults(String url) {
+    final raw = _cache['tmdb_cache_$url'];
+    if (raw is Map && raw['results'] != null) {
+      return List<Map<String, dynamic>>.from(raw['results'] as List);
+    }
+    return [];
+  }
+
   static Future<dynamic> _fetchWithCache(String url) async {
-    final prefs = await SharedPreferences.getInstance();
     final String cacheKey = 'tmdb_cache_$url';
 
-    // 1. Check Memory Cache
+    // 1. Memory cache hit — no disk or network needed
     if (_cache.containsKey(cacheKey)) {
       final cacheAge = DateTime.now().difference(_cacheTime[cacheKey]!);
       if (cacheAge < _cacheDuration) {
-        return _cache[cacheKey]; // Fast return
+        return _cache[cacheKey];
       }
     }
 
-    // 2. Check Disk Cache
+    // 2. Disk cache — reuse singleton prefs, no repeated getInstance()
+    final prefs = await _getPrefs();
     final String? diskCache = prefs.getString(cacheKey);
-    final String? diskCacheTimeString = prefs.getString('${cacheKey}_time');
+    final String? diskCacheTimeStr = prefs.getString('${cacheKey}_time');
 
-    if (diskCache != null && diskCacheTimeString != null) {
-      final diskCacheTime = DateTime.parse(diskCacheTimeString);
+    if (diskCache != null && diskCacheTimeStr != null) {
+      final diskCacheTime = DateTime.parse(diskCacheTimeStr);
       if (DateTime.now().difference(diskCacheTime) < _cacheDuration) {
         final decoded = jsonDecode(diskCache);
-        // Load into memory
         _cache[cacheKey] = decoded;
         _cacheTime[cacheKey] = diskCacheTime;
         return decoded;
       }
     }
 
-    // 3. Fetch from Network
+    // 3. Network fetch
     try {
       final response = await http.get(Uri.parse(url), headers: _headers);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-
-        // Save to memory
         _cache[cacheKey] = data;
         _cacheTime[cacheKey] = DateTime.now();
-
-        // Save to Disk
         prefs.setString(cacheKey, response.body);
         prefs.setString('${cacheKey}_time', DateTime.now().toIso8601String());
-
         return data;
       }
     } catch (e) {
-      print('Error fetching from TMDB network: $e');
+      debugPrint('TmdbService: network error: $e');
     }
 
-    // Fallback exactly to last known disk cache if network fails, regardless of expiration
-    if (diskCache != null) {
-      return jsonDecode(diskCache);
-    }
-
+    // 4. Fallback to stale disk cache on network failure
+    if (diskCache != null) return jsonDecode(diskCache);
     return null;
   }
 
