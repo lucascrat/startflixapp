@@ -239,10 +239,9 @@ class M3uService {
       }
 
       // 2. Second Check: Dynamic Signal (Acquire Signal RPC)
-      final dynamic response = await (_supabase
+      final dynamic response = await _supabase
           .schema('startflix')
-          .rpc('acquire_signal', params: {'p_user_id': user.id}) as Future<dynamic>)
-          .timeout(const Duration(seconds: 15), onTimeout: () => null);
+          .rpc('acquire_signal', params: {'p_user_id': user.id});
 
       if (response != null && response['success'] == true) {
         final dns = response['dns'] as String?;

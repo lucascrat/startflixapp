@@ -309,17 +309,7 @@ class _HomeScreenState extends State<HomeScreen>
         await _loadContent(url);
       } else {
         print('HomeScreen: No URL found for user.');
-        if (mounted) {
-          final bool signalAuthorized = profile['has_signal'] ?? false;
-          setState(() {
-            _isLoading = false;
-            if (signalAuthorized) {
-              _isBlocked = true;
-              _blockMessage =
-                  'Seu acesso está liberado, mas a lista ainda está sendo configurada pelo administrador. Aguarde e tente novamente em instantes.';
-            }
-          });
-        }
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
       print("Error loading content: $e");
