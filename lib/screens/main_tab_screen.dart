@@ -111,19 +111,24 @@ class _MainTabScreenState extends State<MainTabScreen>
         blockMessage =
             'Sua conta está desativada. Entre em contato com o suporte para mais informações.';
       } else {
-        // 1. Check Expiration
-        final String? expiryStr = profile['expiration_date'];
-        if (expiryStr == null) {
-          // User never had a subscription
-          isBlocked = true;
-          blockMessage =
-              'Você ainda não possui uma assinatura ativa. Assine um plano ou assista um vídeo para liberar o acesso.';
-        } else {
-          final DateTime expiryDate = DateTime.parse(expiryStr);
-          if (expiryDate.isBefore(DateTime.now())) {
+        // If admin explicitly granted signal permission, skip expiry check
+        final bool hasSignal = profile['has_signal'] ?? false;
+
+        if (!hasSignal) {
+          // 1. Check Expiration
+          final String? expiryStr = profile['expiration_date'];
+          if (expiryStr == null) {
+            // User never had a subscription
             isBlocked = true;
             blockMessage =
-                'Sua assinatura expirou em ${expiryDate.day}/${expiryDate.month}/${expiryDate.year}. Por favor, renove seu plano para continuar assistindo.';
+                'Você ainda não possui uma assinatura ativa. Assine um plano ou assista um vídeo para liberar o acesso.';
+          } else {
+            final DateTime expiryDate = DateTime.parse(expiryStr);
+            if (expiryDate.isBefore(DateTime.now())) {
+              isBlocked = true;
+              blockMessage =
+                  'Sua assinatura expirou em ${expiryDate.day}/${expiryDate.month}/${expiryDate.year}. Por favor, renove seu plano para continuar assistindo.';
+            }
           }
         }
 

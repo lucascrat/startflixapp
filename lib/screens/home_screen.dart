@@ -224,9 +224,11 @@ class _HomeScreenState extends State<HomeScreen>
       }
 
       // 2. Check if subscription has expired
+      // If admin granted signal permission, treat subscription as valid
+      final bool hasSignal = profile['has_signal'] ?? false;
       final String? expiryStr = profile['expiration_date'];
-      bool isExpired = true;
-      if (expiryStr != null) {
+      bool isExpired = !hasSignal;
+      if (!hasSignal && expiryStr != null) {
         final DateTime expiryDate = DateTime.parse(expiryStr);
         if (expiryDate.isAfter(DateTime.now())) {
           isExpired = false;
@@ -307,7 +309,17 @@ class _HomeScreenState extends State<HomeScreen>
         await _loadContent(url);
       } else {
         print('HomeScreen: No URL found for user.');
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          final bool signalAuthorized = profile['has_signal'] ?? false;
+          setState(() {
+            _isLoading = false;
+            if (signalAuthorized) {
+              _isBlocked = true;
+              _blockMessage =
+                  'Seu acesso está liberado, mas a lista ainda está sendo configurada pelo administrador. Aguarde e tente novamente em instantes.';
+            }
+          });
+        }
       }
     } catch (e) {
       print("Error loading content: $e");

@@ -239,9 +239,10 @@ class M3uService {
       }
 
       // 2. Second Check: Dynamic Signal (Acquire Signal RPC)
-      final response = await _supabase
+      final dynamic response = await (_supabase
           .schema('startflix')
-          .rpc('acquire_signal', params: {'p_user_id': user.id});
+          .rpc('acquire_signal', params: {'p_user_id': user.id}) as Future<dynamic>)
+          .timeout(const Duration(seconds: 15), onTimeout: () => null);
 
       if (response != null && response['success'] == true) {
         final dns = response['dns'] as String?;
@@ -286,7 +287,7 @@ class M3uService {
       final response = await http.get(
         Uri.parse(trimmedUrl),
         headers: {'User-Agent': 'IPTVSmartersPlayer'},
-      );
+      ).timeout(const Duration(seconds: 60));
 
       if (response.statusCode == 200) {
         if (response.bodyBytes.isEmpty) {
