@@ -55,8 +55,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      // Release signal when app is not in use
-      print('MainTabScreen: Release signal on pause');
+      M3uService.stopHeartbeat();
       M3uService().releaseSignal();
       if (mounted) {
         setState(() {
@@ -218,6 +217,10 @@ class _MainTabScreenState extends State<MainTabScreen>
         if (mounted) setState(() => _isLoading = false);
         return;
       }
+
+      // Heartbeat keeps the signal alive while the app is active.
+      // fire-and-forget: no await needed, timer runs in background.
+      m3uService.startHeartbeat();
 
       // Stale-while-revalidate: show cached content instantly,
       // then refresh in background if the cache is older than 24h.

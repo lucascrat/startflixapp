@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
 import 'package:crypto/crypto.dart';
@@ -28,8 +29,8 @@ class SignalResult {
 
 class M3uService {
   final _supabase = Supabase.instance.client;
-  // Bump version to migrate from single-slot to multi-slot format
   static const String _cacheFileName = 'm3u_cache_v21.json';
+  static Timer? _heartbeatTimer;
   static const Duration _cacheTtl = Duration(hours: 24);
   static const int _maxCacheSlots = 5;
 
@@ -423,6 +424,34 @@ class M3uService {
     } catch (e) {
       debugPrint('M3uService: Signal release error');
     }
+  }
+
+  /// Starts a periodic heartbeat (every 2 min) so the admin panel can detect
+  /// active users and auto-release signals from users who left the app.
+  Future<void> startHeartbeat() async {
+    _heartbeatTimer?.cancel();
+    final user = _supabase.auth.currentUser;
+    String? userId = user?.id;
+    if (userId == null) {
+      final prefs = await SharedPreferences.getInstance();
+      final isCodeAccess = prefs.getBool('is_code_access') ?? false;
+      if (!isCodeAccess) return;
+      userId = prefs.getString('code_session_id');
+      if (userId == null) return;
+    }
+    final capturedUserId = userId;
+    _heartbeatTimer = Timer.periodic(const Duration(minutes: 2), (_) async {
+      try {
+        await _supabase
+            .schema('startflix')
+            .rpc('send_heartbeat', params: {'p_user_id': capturedUserId});
+      } catch (_) {}
+    });
+  }
+
+  static void stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
   }
 
   /// Checks the server-side m3u_cache table for a pre-fetched copy of [url].

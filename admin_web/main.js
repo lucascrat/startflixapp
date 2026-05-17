@@ -287,6 +287,12 @@ async function refreshInventoryData() {
     tbody.innerHTML = accounts.map(a => {
       const isUsed = !!a.user_id;
       const clientName = a.profiles?.full_name || a.profiles?.email || (isUsed ? 'ID: ' + a.user_id.substr(0, 8) : '---');
+      const heartbeatHtml = isUsed ? (() => {
+        if (!a.last_heartbeat) return '<div style="font-size:0.72rem;color:#ef4444;margin-top:2px;">⚠ Sem heartbeat</div>';
+        const mins = Math.floor((Date.now() - new Date(a.last_heartbeat)) / 60000);
+        const color = mins >= 5 ? '#ef4444' : mins >= 2 ? '#f59e0b' : '#22c55e';
+        return `<div style="font-size:0.72rem;color:${color};margin-top:2px;">⏱ ${mins < 1 ? '< 1 min' : mins + ' min'} atrás</div>`;
+      })() : '';
 
       return `
         <tr>
@@ -301,7 +307,7 @@ async function refreshInventoryData() {
             </div>
           </td>
           <td>
-            <span class="status-pill ${isUsed ? 'status-inactive' : 'status-active'}" 
+            <span class="status-pill ${isUsed ? 'status-inactive' : 'status-active'}"
                   style="${isUsed ? 'background:rgba(245, 158, 11, 0.1); color:#f59e0b;' : ''}">
               ${isUsed ? 'EM USO' : 'LIVRE'}
             </span>
@@ -310,7 +316,7 @@ async function refreshInventoryData() {
             ${isUsed ?
           `<div style="display:flex; align-items:center; gap:0.5rem;">
                  <i data-lucide="user" style="width:14px;"></i> ${clientName}
-               </div>`
+               </div>${heartbeatHtml}`
           : '<span style="opacity:0.3;">---</span>'}
           </td>
           <td>
@@ -327,7 +333,6 @@ async function refreshInventoryData() {
 
     initIcons();
 
-    // Show toast notification
     showToast('🔄 Lista atualizada automaticamente!', 'success');
 
   } catch (err) {
@@ -1030,9 +1035,14 @@ async function renderInventoryView() {
 
       <div class="table-header">
         <h3>Estoque de Contas (IPTV/Mídia)</h3>
-        <button class="btn btn-primary" onclick="openInventoryModal()">
-          <i data-lucide="plus"></i> Adicionar Conta
-        </button>
+        <div style="display:flex;gap:0.5rem;">
+          <button class="btn btn-secondary" onclick="releaseStaleSignals(5)" title="Libera sinais sem heartbeat há mais de 5 minutos (usuário fechou o app)">
+            <i data-lucide="wifi-off"></i> Liberar Inativos
+          </button>
+          <button class="btn btn-primary" onclick="openInventoryModal()">
+            <i data-lucide="plus"></i> Adicionar Conta
+          </button>
+        </div>
       </div>
 
       <!-- Stats -->
@@ -1058,7 +1068,7 @@ async function renderInventoryView() {
               <th>Fornecedor</th>
               <th>Login info</th>
               <th>Status</th>
-              <th>Cliente Atual</th>
+              <th>Cliente / Heartbeat</th>
               <th>Ações</th>
             </tr>
           </thead>
@@ -1071,10 +1081,13 @@ async function renderInventoryView() {
   `;
   initIcons();
 
+  // Auto-release stale signals silently on load (no toast)
+  try {
+    await supabase.schema('startflix').rpc('release_stale_signals', { p_minutes: 5 });
+  } catch (_) {}
+
   // Fetch Data
   try {
-    // We need to fetch profiles via user_id, but supabase-js simple query might simply return the ID.
-    // Ideally we join, but let's try simple first to not break if permissions are weird on join.
     const { data: accounts, error } = await supabase.from('media_accounts')
       .select('*')
       .order('created_at', { ascending: false });
@@ -1100,6 +1113,12 @@ async function renderInventoryView() {
     tbody.innerHTML = accounts.map(a => {
       const isUsed = !!a.user_id;
       const clientName = a.profiles?.full_name || a.profiles?.email || (isUsed ? 'ID: ' + a.user_id.substr(0, 8) : '---');
+      const heartbeatHtml = isUsed ? (() => {
+        if (!a.last_heartbeat) return '<div style="font-size:0.72rem;color:#ef4444;margin-top:2px;">⚠ Sem heartbeat</div>';
+        const mins = Math.floor((Date.now() - new Date(a.last_heartbeat)) / 60000);
+        const color = mins >= 5 ? '#ef4444' : mins >= 2 ? '#f59e0b' : '#22c55e';
+        return `<div style="font-size:0.72rem;color:${color};margin-top:2px;">⏱ ${mins < 1 ? '< 1 min' : mins + ' min'} atrás</div>`;
+      })() : '';
 
       return `
         <tr>
@@ -1114,7 +1133,7 @@ async function renderInventoryView() {
             </div>
           </td>
           <td>
-            <span class="status-pill ${isUsed ? 'status-inactive' : 'status-active'}" 
+            <span class="status-pill ${isUsed ? 'status-inactive' : 'status-active'}"
                   style="${isUsed ? 'background:rgba(245, 158, 11, 0.1); color:#f59e0b;' : ''}">
               ${isUsed ? 'EM USO' : 'LIVRE'}
             </span>
@@ -1123,7 +1142,7 @@ async function renderInventoryView() {
             ${isUsed ?
           `<div style="display:flex; align-items:center; gap:0.5rem;">
                  <i data-lucide="user" style="width:14px;"></i> ${clientName}
-               </div>`
+               </div>${heartbeatHtml}`
           : '<span style="opacity:0.3;">---</span>'}
           </td>
           <td>
@@ -1185,8 +1204,25 @@ window.deleteInventoryItem = async (id) => {
 
 window.releaseInventoryItem = async (id) => {
   if (confirm("Desvincular cliente desta conta? Ela voltará a ficar LIVRE.")) {
-    await supabase.from('media_accounts').update({ user_id: null }).eq('id', id);
+    await supabase.from('media_accounts').update({ user_id: null, last_heartbeat: null }).eq('id', id);
     renderInventoryView();
+  }
+};
+
+window.releaseStaleSignals = async (minutes = 5) => {
+  try {
+    const { data, error } = await supabase.schema('startflix').rpc('release_stale_signals', { p_minutes: minutes });
+    if (error) throw error;
+    const released = data?.released ?? 0;
+    if (released > 0) {
+      showToast(`${released} sinal(is) inativo(s) liberado(s)!`, 'success');
+    } else {
+      showToast('Nenhum sinal inativo encontrado.', 'success');
+    }
+    renderInventoryView();
+  } catch (err) {
+    console.error('release_stale_signals error:', err);
+    showToast('Erro ao liberar sinais inativos: ' + err.message, 'error');
   }
 };
 
