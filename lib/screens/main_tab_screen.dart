@@ -77,16 +77,15 @@ class _MainTabScreenState extends State<MainTabScreen>
     // Check if user entered via access code (no Supabase auth needed)
     final prefs = await SharedPreferences.getInstance();
     final bool isCodeAccess = prefs.getBool('is_code_access') ?? false;
-    final String? tempM3uUrl = prefs.getString('temp_m3u_url');
 
-    if (isCodeAccess && tempM3uUrl != null) {
-      print('MainTabScreen: Code access mode detected. Loading list...');
+    if (isCodeAccess) {
+      print('MainTabScreen: Code access mode — acquiring signal from pool...');
       if (mounted) {
         setState(() {
           _isCodeAccess = true;
           _isAdmin = false;
           _isBlocked = false;
-          _adsEnabled = true; // Always show ads for code access users
+          _adsEnabled = true;
           _hasM3U = true;
         });
         await _loadM3uData();
@@ -189,19 +188,14 @@ class _MainTabScreenState extends State<MainTabScreen>
       String? url;
       SignalStatus? signalStatus;
 
-      // If code access mode, use the stored temp M3U URL
-      if (_isCodeAccess) {
-        final prefs = await SharedPreferences.getInstance();
-        url = prefs.getString('temp_m3u_url');
-      } else {
-        final result = await m3uService.acquireSignal();
-        signalStatus = result.status;
-        url = result.url;
-      }
+      // acquireSignal() handles both authenticated users and code-access users.
+      final result = await m3uService.acquireSignal();
+      signalStatus = result.status;
+      url = result.url;
 
-      // Users with a dedicated signal must not see the generic default list.
-      // When their signal can't be acquired, show a specific message instead.
-      if ((url == null || url.isEmpty) && hasSignal && !_isCodeAccess) {
+      // Users with signal permission (or code-access) must not fall back to
+      // the generic default list — show a specific message when unavailable.
+      if ((url == null || url.isEmpty) && (hasSignal || _isCodeAccess)) {
         final stockExhausted = signalStatus == SignalStatus.stockExhausted;
         if (mounted) {
           setState(() {
@@ -215,7 +209,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         return;
       }
 
-      // Fallback to default only for users without a dedicated signal.
+      // Fallback to default list only for users without any signal permission.
       if (url == null || url.isEmpty) {
         url = await _getDefaultM3uUrl();
       }

@@ -1857,7 +1857,9 @@ async function renderAccessCodesView() {
         <td><strong style="color: var(--primary-light); font-family: monospace; font-size: 1.1rem;">${c.code}</strong></td>
         <td>${c.description || '---'}</td>
         <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; color: var(--text-dim);">
-          ${c.m3u_url}
+          ${c.m3u_url
+            ? c.m3u_url
+            : '<span class="badge badge-active" style="font-size:0.75rem">🔄 Sinal do estoque</span>'}
         </td>
         <td>
           <span class="status-pill ${c.is_active ? 'status-active' : 'status-inactive'}">
@@ -1886,12 +1888,15 @@ window.openAccessCodeModal = () => {
 window.handleAccessCodeSubmit = async (e) => {
   e.preventDefault();
   const code = document.getElementById('ac-code').value.trim().toUpperCase();
-  const url = document.getElementById('ac-url').value.trim();
+  const urlVal = document.getElementById('ac-url')?.value?.trim() || '';
   const desc = document.getElementById('ac-desc').value.trim();
 
   try {
+    // m3u_url is optional — when empty the app uses the shared signal pool
     const { error } = await supabase.from('access_codes').insert({
-      code, m3u_url: url, description: desc
+      code,
+      m3u_url: urlVal || null,
+      description: desc,
     });
 
     if (error) throw error;

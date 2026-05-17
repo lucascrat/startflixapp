@@ -178,11 +178,26 @@ class _HomeScreenState extends State<HomeScreen>
 
       final prefs = await SharedPreferences.getInstance();
       final bool isCodeAccess = prefs.getBool('is_code_access') ?? false;
-      final String? tempM3uUrl = prefs.getString('temp_m3u_url');
 
-      if (isCodeAccess && tempM3uUrl != null) {
-        print('HomeScreen: Using quick access code list.');
-        await _loadContent(tempM3uUrl);
+      // Code-access: skip Supabase auth and go straight to the signal pool.
+      // acquireSignal() handles the device-UUID-based pool acquisition.
+      if (isCodeAccess) {
+        print('HomeScreen: Code access — acquiring signal from pool...');
+        final result = await _m3uService.acquireSignal();
+        if (result.url != null) {
+          await _loadContent(result.url!);
+        } else {
+          final stockExhausted = result.status == SignalStatus.stockExhausted;
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+              _isBlocked = true;
+              _blockMessage = stockExhausted
+                  ? 'Todas as linhas estão ocupadas no momento. Aguarde alguns instantes e tente novamente.'
+                  : 'Sinal não disponível. Tente novamente em instantes.';
+            });
+          }
+        }
         return;
       }
 

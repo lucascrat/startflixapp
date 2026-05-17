@@ -3,7 +3,9 @@ import 'dart:io' as io;
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/media_item.dart';
 
@@ -286,16 +288,90 @@ class M3uService {
     return result.url;
   }
 
+  /// Returns the persistent session UUID for code-access users.
+  /// Generated once and stored in SharedPreferences.
+  static Future<String> _codeSessionId() async {
+    final prefs = await SharedPreferences.getInstance();
+    var id = prefs.getString('code_session_id');
+    if (id == null) {
+      id = const Uuid().v4();
+      await prefs.setString('code_session_id', id);
+    }
+    return id;
+  }
+
+  /// Acquire a signal from the pool using [userId].
+  /// Shared by both authenticated users and code-access users.
+  Future<SignalResult> _acquireFromPool(String userId) async {
+    Map<String, dynamic>? rpcResponse;
+    try {
+      final dynamic raw = await _supabase
+          .schema('startflix')
+          .rpc('acquire_signal', params: {'p_user_id': userId});
+      if (raw is Map) rpcResponse = Map<String, dynamic>.from(raw);
+    } catch (rpcError) {
+      debugPrint('M3uService: acquire_signal RPC failed: $rpcError');
+    }
+
+    if (rpcResponse != null && rpcResponse['success'] == true) {
+      final url = _buildM3uUrl(
+        rpcResponse['dns'] as String?,
+        rpcResponse['username'] as String?,
+        rpcResponse['password'] as String?,
+      );
+      if (url != null) return SignalResult(status: SignalStatus.ok, url: url);
+    }
+
+    // Direct query fallback (RPC network error / cache miss)
+    try {
+      final account = await _supabase
+          .schema('startflix')
+          .from('media_accounts')
+          .select('dns, username, password')
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (account != null) {
+        final url = _buildM3uUrl(
+          account['dns'] as String?,
+          account['username'] as String?,
+          account['password'] as String?,
+        );
+        if (url != null) {
+          debugPrint('M3uService: signal found via direct query');
+          return SignalResult(status: SignalStatus.ok, url: url);
+        }
+      }
+    } catch (queryError) {
+      debugPrint('M3uService: direct media_accounts query failed: $queryError');
+    }
+
+    if (rpcResponse != null && rpcResponse['error'] == 'lotado') {
+      return const SignalResult(status: SignalStatus.stockExhausted);
+    }
+    return const SignalResult(status: SignalStatus.unavailable);
+  }
+
   /// Resolve the user's signal. Returns a [SignalResult] so callers can show
-  /// a meaningful message when no signal could be acquired (e.g. all lines
-  /// are currently in use).
+  /// a meaningful message when no signal could be acquired.
+  ///
+  /// Works for both authenticated users and code-access users (which use a
+  /// persistent device UUID stored in SharedPreferences).
   Future<SignalResult> acquireSignal() async {
     try {
       final user = _supabase.auth.currentUser;
+
+      // ── Code-access path (no Supabase auth session) ──────────────────────
       if (user == null) {
-        return const SignalResult(status: SignalStatus.notAuthenticated);
+        final prefs = await SharedPreferences.getInstance();
+        final isCodeAccess = prefs.getBool('is_code_access') ?? false;
+        if (!isCodeAccess) {
+          return const SignalResult(status: SignalStatus.notAuthenticated);
+        }
+        final sessionId = await _codeSessionId();
+        return _acquireFromPool(sessionId);
       }
 
+      // ── Authenticated user path ───────────────────────────────────────────
       // 1. Static URL in profile takes priority.
       final profile = await _supabase
           .schema('startflix')
@@ -309,60 +385,8 @@ class M3uService {
         return SignalResult(status: SignalStatus.ok, url: staticUrl.trim());
       }
 
-      // 2. Try the acquire_signal RPC.
-      Map<String, dynamic>? rpcResponse;
-      try {
-        final dynamic raw = await _supabase
-            .schema('startflix')
-            .rpc('acquire_signal', params: {'p_user_id': user.id});
-        if (raw is Map) {
-          rpcResponse = Map<String, dynamic>.from(raw);
-        }
-      } catch (rpcError) {
-        debugPrint('M3uService: acquire_signal RPC failed: $rpcError');
-      }
-
-      if (rpcResponse != null && rpcResponse['success'] == true) {
-        final url = _buildM3uUrl(
-          rpcResponse['dns'] as String?,
-          rpcResponse['username'] as String?,
-          rpcResponse['password'] as String?,
-        );
-        if (url != null) {
-          return SignalResult(status: SignalStatus.ok, url: url);
-        }
-      }
-
-      // 3. Direct query fallback for cases where the RPC failed entirely
-      //    (network error, function temporarily missing, etc.).
-      try {
-        final account = await _supabase
-            .schema('startflix')
-            .from('media_accounts')
-            .select('dns, username, password')
-            .eq('user_id', user.id)
-            .maybeSingle();
-
-        if (account != null) {
-          final url = _buildM3uUrl(
-            account['dns'] as String?,
-            account['username'] as String?,
-            account['password'] as String?,
-          );
-          if (url != null) {
-            debugPrint('M3uService: signal found via direct query');
-            return SignalResult(status: SignalStatus.ok, url: url);
-          }
-        }
-      } catch (queryError) {
-        debugPrint('M3uService: direct media_accounts query failed: $queryError');
-      }
-
-      // No URL resolved. Differentiate "stock exhausted" from other failures.
-      if (rpcResponse != null && rpcResponse['error'] == 'lotado') {
-        return const SignalResult(status: SignalStatus.stockExhausted);
-      }
-      return const SignalResult(status: SignalStatus.unavailable);
+      // 2. Acquire from shared pool.
+      return _acquireFromPool(user.id);
     } catch (e) {
       debugPrint('M3uService: URL retrieval error: $e');
       return const SignalResult(status: SignalStatus.unavailable);
@@ -378,14 +402,24 @@ class M3uService {
     return '$host/get.php?username=$username&password=$password&type=m3u_plus&output=ts';
   }
 
-  /// Release the signal (return to stock)
+  /// Release the signal back to the pool.
+  /// Works for both authenticated users and code-access users.
   Future<void> releaseSignal() async {
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null) return;
+      String? userId = user?.id;
+
+      if (userId == null) {
+        final prefs = await SharedPreferences.getInstance();
+        final isCodeAccess = prefs.getBool('is_code_access') ?? false;
+        if (!isCodeAccess) return;
+        userId = prefs.getString('code_session_id');
+        if (userId == null) return;
+      }
+
       await _supabase
           .schema('startflix')
-          .rpc('release_signal', params: {'p_user_id': user.id});
+          .rpc('release_signal', params: {'p_user_id': userId});
     } catch (e) {
       debugPrint('M3uService: Signal release error');
     }
