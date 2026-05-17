@@ -260,6 +260,7 @@ class _HomeScreenState extends State<HomeScreen>
       }
 
       String? url = profile['m3u_url'];
+      SignalStatus? signalStatus;
 
       // If user has no manual m3u_url, try to acquire a Dynamic Signal (Stock list)
       if (url == null || url.isEmpty) {
@@ -270,7 +271,9 @@ class _HomeScreenState extends State<HomeScreen>
             _loadingPhase = 'Buscando sinal liberado...';
           });
         }
-        url = await _m3uService.getUserM3uUrl();
+        final result = await _m3uService.acquireSignal();
+        signalStatus = result.status;
+        url = result.url;
         if (url != null) {
           print('HomeScreen: Dynamic signal acquired: $url');
           if (mounted) {
@@ -283,12 +286,29 @@ class _HomeScreenState extends State<HomeScreen>
             );
           }
         } else {
-          print('HomeScreen: No dynamic signal found.');
+          print('HomeScreen: No dynamic signal found (status=${result.status}).');
         }
       }
 
-      // If user has no list and no signal, try to get default list from database
+      // Users with a dedicated signal must never see the generic default list.
+      // Only fall back to it for users without any signal assignment.
       if (url == null || url.isEmpty) {
+        if (hasSignal) {
+          final stockExhausted = signalStatus == SignalStatus.stockExhausted;
+          print('HomeScreen: has_signal=true but no URL resolved '
+              '(stockExhausted=$stockExhausted).');
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+              _isBlocked = true;
+              _blockMessage = stockExhausted
+                  ? 'Todas as linhas estão ocupadas no momento. Aguarde alguns instantes e tente novamente.'
+                  : 'Seu sinal está sendo configurado. Aguarde alguns instantes e tente novamente.';
+            });
+          }
+          return;
+        }
+
         if (mounted) {
           setState(() {
             _loadingProgress = 0.3;
@@ -346,18 +366,29 @@ class _HomeScreenState extends State<HomeScreen>
         });
       }
 
-      // 1. Tentar carregar do cache primeiro
-      final cachedItems = await _m3uService.getCachedM3uItems(url);
-      if (cachedItems != null && cachedItems.isNotEmpty) {
-        print("HomeScreen: Usando lista em cache para agilizar...");
-        _processItemsSequentially(cachedItems);
+      // Stale-while-revalidate: show cached content instantly,
+      // then refresh in background if older than 24h.
+      final staleItems = await _m3uService.getStaleCachedItems(url);
+      if (staleItems != null && staleItems.isNotEmpty) {
+        print("HomeScreen: Cache encontrado — exibindo imediatamente.");
+        _processItemsSequentially(staleItems);
+
+        final fresh = await _m3uService.isCacheFresh(url);
+        if (!fresh) {
+          _m3uService.parseM3uUrl(url).then((freshItems) {
+            if (freshItems.isNotEmpty) {
+              _m3uService.cacheM3uItems(url, freshItems);
+              if (mounted) _processItemsSequentially(freshItems);
+            }
+          }).catchError((_) {});
+        }
         return;
       }
 
       if (mounted) {
         setState(() {
           _loadingProgress = 0.5;
-          _loadingPhase = 'Processando conteúdo...';
+          _loadingPhase = 'Baixando lista...';
         });
       }
 
@@ -365,9 +396,7 @@ class _HomeScreenState extends State<HomeScreen>
 
       if (!mounted) return;
 
-      // 2. Salvar no cache para a próxima vez
       await _m3uService.cacheM3uItems(url, items);
-
       _processItemsSequentially(items);
     } catch (e) {
       if (mounted) {

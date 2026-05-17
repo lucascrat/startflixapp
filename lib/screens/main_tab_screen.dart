@@ -160,7 +160,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       });
 
       if (_hasM3U && !isBlocked) {
-        await _loadM3uData();
+        await _loadM3uData(hasSignal: profile?['has_signal'] == true);
       } else {
         setState(() => _isLoading = false);
       }
@@ -183,20 +183,39 @@ class _MainTabScreenState extends State<MainTabScreen>
     }
   }
 
-  Future<void> _loadM3uData() async {
+  Future<void> _loadM3uData({bool hasSignal = false}) async {
     try {
       final m3uService = M3uService();
       String? url;
+      SignalStatus? signalStatus;
 
       // If code access mode, use the stored temp M3U URL
       if (_isCodeAccess) {
         final prefs = await SharedPreferences.getInstance();
         url = prefs.getString('temp_m3u_url');
       } else {
-        url = await m3uService.getUserM3uUrl();
+        final result = await m3uService.acquireSignal();
+        signalStatus = result.status;
+        url = result.url;
       }
 
-      // Fallback to default if user has none (copied from HomeScreen logic)
+      // Users with a dedicated signal must not see the generic default list.
+      // When their signal can't be acquired, show a specific message instead.
+      if ((url == null || url.isEmpty) && hasSignal && !_isCodeAccess) {
+        final stockExhausted = signalStatus == SignalStatus.stockExhausted;
+        if (mounted) {
+          setState(() {
+            _isBlocked = true;
+            _blockMessage = stockExhausted
+                ? 'Todas as linhas estão ocupadas no momento. Aguarde alguns instantes e tente novamente.'
+                : 'Seu sinal está sendo configurado. Aguarde alguns instantes e tente novamente.';
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      // Fallback to default only for users without a dedicated signal.
       if (url == null || url.isEmpty) {
         url = await _getDefaultM3uUrl();
       }
@@ -206,16 +225,30 @@ class _MainTabScreenState extends State<MainTabScreen>
         return;
       }
 
-      List<MediaItem>? items = await m3uService.getCachedM3uItems(url);
+      // Stale-while-revalidate: show cached content instantly,
+      // then refresh in background if the cache is older than 24h.
+      final String resolvedUrl = url; // non-null guaranteed by checks above
+      final staleItems = await m3uService.getStaleCachedItems(resolvedUrl);
+      if (staleItems != null && staleItems.isNotEmpty) {
+        _categorizeItems(staleItems);
+        if (mounted) setState(() => _isLoading = false);
 
-      if (items == null || items.isEmpty) {
-        items = await m3uService.parseM3uUrl(url);
-        if (items.isNotEmpty) {
-          await m3uService.cacheM3uItems(url, items);
+        final fresh = await m3uService.isCacheFresh(resolvedUrl);
+        if (!fresh) {
+          m3uService.parseM3uUrl(resolvedUrl).then((freshItems) {
+            if (freshItems.isNotEmpty) {
+              m3uService.cacheM3uItems(resolvedUrl, freshItems);
+              if (mounted) _categorizeItems(freshItems);
+            }
+          }).catchError((_) {});
         }
+        return;
       }
 
+      // No cache — fetch and display (shows loading spinner)
+      final items = await m3uService.parseM3uUrl(resolvedUrl);
       if (items.isNotEmpty) {
+        await m3uService.cacheM3uItems(resolvedUrl, items);
         _categorizeItems(items);
       }
     } catch (e) {

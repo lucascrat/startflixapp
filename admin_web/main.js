@@ -397,7 +397,8 @@ async function navigateTo(page) {
     apps: 'Listas e Aplicativos',
     inventory: 'Estoque / Mídia',
     settings: 'Configurações do Sistema',
-    access_codes: 'Códigos de Acesso'
+    access_codes: 'Códigos de Acesso',
+    cache: 'Cache de Listas',
   };
   pageTitle.innerText = titles[page] || 'Painel';
 
@@ -428,6 +429,9 @@ async function navigateTo(page) {
       break;
     case 'access_codes':
       renderAccessCodesView();
+      break;
+    case 'cache':
+      renderCacheView();
       break;
     default:
       dynamicContent.innerHTML = `<div class="stat-card"><h3>Em breve: ${page}</h3></div>`;
@@ -1906,5 +1910,142 @@ window.deleteAccessCode = async (id) => {
     renderAccessCodesView();
   }
 };
+
+// ─── Cache de Listas ──────────────────────────────────────────────────────────
+
+const MAX_CACHE_BYTES = 8 * 1024 * 1024; // 8 MB limit per list
+
+async function renderCacheView() {
+  dynamicContent.innerHTML = `
+    <div class="animate-fade-in">
+      <div class="table-header">
+        <h3>Cache de Listas M3U</h3>
+        <button class="btn btn-primary" onclick="renderCacheView()">
+          <i data-lucide="refresh-cw"></i> Atualizar
+        </button>
+      </div>
+      <p style="color:var(--text-muted);margin-bottom:1.5rem;font-size:0.875rem;">
+        Sincronize as listas default para que o app carregue instantaneamente,
+        sem baixar diretamente do provedor. O cache expira em 24h.
+      </p>
+      <div id="cache-table-container"><div class="loading-spinner"></div></div>
+    </div>`;
+  initIcons();
+
+  const [{ data: lists }, { data: cacheRows }] = await Promise.all([
+    supabase.from('default_m3u_lists').select('*').order('priority', { ascending: false }),
+    supabase.from('m3u_cache').select('*'),
+  ]);
+
+  const cacheMap = {};
+  (cacheRows || []).forEach(r => { cacheMap[r.source_url] = r; });
+
+  const rows = (lists || []).map(list => {
+    const c = cacheMap[list.m3u_url];
+    const statusBadge = c
+      ? (c.status === 'ready'
+          ? `<span class="badge badge-active">Pronto</span>`
+          : c.status === 'syncing'
+            ? `<span class="badge" style="background:#f59e0b22;color:#f59e0b">Sincronizando…</span>`
+            : `<span class="badge badge-inactive" title="${c.error_msg || ''}">Erro</span>`)
+      : `<span class="badge badge-inactive">Não sincronizado</span>`;
+
+    const channels = c?.channel_count ? `${c.channel_count.toLocaleString()} canais` : '—';
+    const size = c?.byte_size ? `${(c.byte_size / 1024).toFixed(0)} KB` : '—';
+    const ago = c?.cached_at ? timeSince(c.cached_at) : '—';
+    const freshWarning = c?.cached_at && (Date.now() - new Date(c.cached_at).getTime()) > 86400000
+      ? `<i data-lucide="alert-triangle" style="color:#f59e0b;width:14px;height:14px;vertical-align:middle" title="Cache expirado (>24h)"></i> `
+      : '';
+
+    return `
+      <tr>
+        <td><strong>${list.name}</strong></td>
+        <td>${statusBadge}</td>
+        <td>${channels}</td>
+        <td>${size}</td>
+        <td>${freshWarning}${ago}</td>
+        <td>
+          <button class="btn btn-secondary btn-sm"
+            onclick="syncListCache('${list.id}','${list.m3u_url}','${list.name.replace(/'/g,"\\'")}')">
+            <i data-lucide="cloud-download"></i> Sincronizar
+          </button>
+          ${c ? `<button class="btn btn-sm" style="background:#ef444420;color:#ef4444;margin-left:4px"
+            onclick="clearListCache('${list.m3u_url}')">
+            <i data-lucide="trash-2"></i>
+          </button>` : ''}
+        </td>
+      </tr>`;
+  }).join('');
+
+  document.getElementById('cache-table-container').innerHTML = `
+    <div class="data-table-container">
+      <table class="data-table">
+        <thead><tr>
+          <th>Lista</th><th>Status</th><th>Canais</th><th>Tamanho</th><th>Última Sync</th><th>Ações</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" style="text-align:center">Nenhuma lista padrão cadastrada</td></tr>'}</tbody>
+      </table>
+    </div>`;
+  initIcons();
+}
+
+window.syncListCache = async (listId, sourceUrl, listName) => {
+  showToast('Sincronizando lista…', 'info');
+
+  await supabase.from('m3u_cache').upsert(
+    { list_name: listName, source_url: sourceUrl, status: 'syncing', m3u_content: null },
+    { onConflict: 'source_url' }
+  );
+  renderCacheView();
+
+  try {
+    const resp = await fetch(sourceUrl, { headers: { 'User-Agent': 'IPTVSmartersPlayer' } });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const content = await resp.text();
+    if (content.length > MAX_CACHE_BYTES) {
+      throw new Error(`Arquivo muito grande (${(content.length / 1024 / 1024).toFixed(1)} MB > 8 MB). Cache não suportado para esta lista.`);
+    }
+
+    const channelCount = (content.match(/#EXTINF/g) || []).length;
+
+    await supabase.from('m3u_cache').upsert({
+      list_name: listName,
+      source_url: sourceUrl,
+      m3u_content: content,
+      channel_count: channelCount,
+      byte_size: content.length,
+      status: 'ready',
+      cached_at: new Date().toISOString(),
+      error_msg: null,
+    }, { onConflict: 'source_url' });
+
+    showToast(`✅ ${listName} sincronizada — ${channelCount.toLocaleString()} canais`, 'success');
+  } catch (err) {
+    await supabase.from('m3u_cache').upsert({
+      list_name: listName,
+      source_url: sourceUrl,
+      status: 'error',
+      error_msg: err.message,
+    }, { onConflict: 'source_url' });
+    showToast(`Erro ao sincronizar: ${err.message}`, 'error');
+  }
+
+  renderCacheView();
+};
+
+window.clearListCache = async (sourceUrl) => {
+  if (!confirm('Remover cache desta lista?')) return;
+  await supabase.from('m3u_cache').delete().eq('source_url', sourceUrl);
+  renderCacheView();
+};
+
+function timeSince(dateStr) {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return 'agora';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min atrás`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h atrás`;
+  return `${Math.floor(seconds / 86400)}d atrás`;
+}
 
 init();

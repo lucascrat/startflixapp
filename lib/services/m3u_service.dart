@@ -7,10 +7,29 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/media_item.dart';
 
+enum SignalStatus {
+  /// URL resolved (static profile URL or acquired signal).
+  ok,
+  /// `acquire_signal` returned `error: 'lotado'` — all stock signals are in use.
+  stockExhausted,
+  /// User has no signal and stock state could not be confirmed (RPC error etc).
+  unavailable,
+  /// No authenticated user.
+  notAuthenticated,
+}
+
+class SignalResult {
+  final SignalStatus status;
+  final String? url;
+  const SignalResult({required this.status, this.url});
+}
+
 class M3uService {
   final _supabase = Supabase.instance.client;
-  // Bump cache version to force re-cache with new secure format
-  static const String _cacheFileName = 'm3u_cache_v20.json';
+  // Bump version to migrate from single-slot to multi-slot format
+  static const String _cacheFileName = 'm3u_cache_v21.json';
+  static const Duration _cacheTtl = Duration(hours: 24);
+  static const int _maxCacheSlots = 5;
 
   /// Hash a URL so it is never stored in plaintext
   static String _hashUrl(String url) {
@@ -80,77 +99,119 @@ class M3uService {
         .trim();
   }
 
-  Future<dynamic> _getCacheFile() async {
+  Future<io.File?> _getCacheFile() async {
     if (kIsWeb) return null;
     final directory = await getApplicationDocumentsDirectory();
     return io.File('${directory.path}/$_cacheFileName');
   }
 
-  /// Cache the parsed items locally in a file (URLs are obfuscated)
-  Future<void> cacheM3uItems(String url, List<MediaItem> items) async {
-    if (kIsWeb) return;
+  Future<Map<String, dynamic>> _readCacheMap() async {
+    try {
+      final file = await _getCacheFile();
+      if (file == null || !await file.exists()) return {};
+      final content = await file.readAsString();
+      if (content.isEmpty) return {};
+      final data = json.decode(content);
+      if (data is! Map || data['version'] != 21) return {};
+      return Map<String, dynamic>.from(data['slots'] ?? {});
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> _writeCacheMap(Map<String, dynamic> slots) async {
     try {
       final file = await _getCacheFile();
       if (file == null) return;
-      // Obfuscate each item's stream URL before writing to cache
+      await file.writeAsString(json.encode({'version': 21, 'slots': slots}));
+    } catch (_) {}
+  }
+
+  List<MediaItem> _decodeItems(dynamic rawList) {
+    if (rawList == null) return [];
+    return (rawList as List).map((j) {
+      final map = Map<String, dynamic>.from(j as Map);
+      if (map['url'] != null && !map['url'].toString().startsWith('http')) {
+        map['url'] = _deobfuscateUrl(map['url'].toString());
+      }
+      return MediaItem.fromJson(map);
+    }).toList();
+  }
+
+  Future<Map<String, dynamic>?> _getCacheEntry(String url) async {
+    final slots = await _readCacheMap();
+    final entry = slots[_hashUrl(url)];
+    return entry is Map ? Map<String, dynamic>.from(entry) : null;
+  }
+
+  /// Cache the parsed items locally — multi-slot, max [_maxCacheSlots] URLs.
+  Future<void> cacheM3uItems(String url, List<MediaItem> items) async {
+    if (kIsWeb) return;
+    try {
+      final slots = await _readCacheMap();
+      final key = _hashUrl(url);
+
+      // Evict oldest slot when at limit (excluding current key)
+      if (!slots.containsKey(key) && slots.length >= _maxCacheSlots) {
+        String? oldestKey;
+        DateTime? oldestTs;
+        for (final e in slots.entries) {
+          final ts = e.value is Map
+              ? DateTime.tryParse((e.value as Map)['timestamp'] ?? '')
+              : null;
+          if (ts != null && (oldestTs == null || ts.isBefore(oldestTs))) {
+            oldestTs = ts;
+            oldestKey = e.key;
+          }
+        }
+        if (oldestKey != null) slots.remove(oldestKey);
+      }
+
       final jsonList = items.map((i) {
         final map = i.toJson();
         map['url'] = _obfuscateUrl(map['url'] ?? '');
         return map;
       }).toList();
 
-      // Store hashed URL as cache key so the raw URL is never on disk
-      await file.writeAsString(
-        json.encode({
-          'urlHash': _hashUrl(url),
-          'items': jsonList,
-          'timestamp': DateTime.now().toIso8601String(),
-        }),
-      );
-    } catch (e) {
+      slots[key] = {
+        'items': jsonList,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      await _writeCacheMap(slots);
+    } catch (_) {
       debugPrint('M3uService: Cache write error');
     }
   }
 
-  /// Get cached items from file (deobfuscates URLs on read)
+  /// Returns cached items only if cache is fresh (within [_cacheTtl]).
+  /// Returns null if missing or expired.
   Future<List<MediaItem>?> getCachedM3uItems(String url) async {
     if (kIsWeb) return null;
-    try {
-      final file = await _getCacheFile();
-      if (file == null || !await (file as io.File).exists()) return null;
+    final entry = await _getCacheEntry(url);
+    if (entry == null) return null;
+    final ts = DateTime.tryParse(entry['timestamp'] ?? '');
+    if (ts == null || DateTime.now().difference(ts) > _cacheTtl) return null;
+    return _decodeItems(entry['items']);
+  }
 
-      final content = await file.readAsString();
-      if (content.isEmpty) return null;
+  /// Returns cached items ignoring TTL (stale-while-revalidate).
+  /// Returns null only when no cache exists at all.
+  Future<List<MediaItem>?> getStaleCachedItems(String url) async {
+    if (kIsWeb) return null;
+    final entry = await _getCacheEntry(url);
+    if (entry == null) return null;
+    return _decodeItems(entry['items']);
+  }
 
-      final data = json.decode(content);
-
-      // Support both old ('url') and new ('urlHash') cache formats
-      final storedHash = data['urlHash'];
-      final storedUrl = data['url'];
-      final currentHash = _hashUrl(url);
-
-      if (storedHash != null) {
-        if (storedHash != currentHash) return null;
-      } else if (storedUrl != null) {
-        if (storedUrl != url) return null;
-      } else {
-        return null;
-      }
-
-      final List<dynamic> jsonList = data['items'];
-
-      return jsonList.map((j) {
-        final map = Map<String, dynamic>.from(j);
-        // Deobfuscate stream URL if it's base64-encoded
-        if (map['url'] != null && !map['url'].toString().startsWith('http')) {
-          map['url'] = _deobfuscateUrl(map['url']);
-        }
-        return MediaItem.fromJson(map);
-      }).toList();
-    } catch (e) {
-      debugPrint('M3uService: Cache read error');
-      return null;
-    }
+  /// True if a cache entry exists AND is younger than [_cacheTtl].
+  Future<bool> isCacheFresh(String url) async {
+    if (kIsWeb) return false;
+    final entry = await _getCacheEntry(url);
+    if (entry == null) return false;
+    final ts = DateTime.tryParse(entry['timestamp'] ?? '');
+    if (ts == null) return false;
+    return DateTime.now().difference(ts) <= _cacheTtl;
   }
 
   Future<MediaItem?> searchMatch(String title) async {
@@ -159,7 +220,7 @@ class M3uService {
       final url = await getUserM3uUrl();
       if (url == null) return null;
 
-      final items = await getCachedM3uItems(url);
+      final items = await getStaleCachedItems(url);
       if (items == null || items.isEmpty) return null;
 
       final searchTitle = normalizeTitle(title);
@@ -201,7 +262,7 @@ class M3uService {
       final url = await getUserM3uUrl();
       if (url == null) return [];
 
-      final items = await getCachedM3uItems(url);
+      final items = await getStaleCachedItems(url);
       if (items == null) return [];
 
       final Set<String> uniqueTitles = {};
@@ -219,13 +280,23 @@ class M3uService {
   }
 
   /// Get the M3U URL for the current user.
-  /// First checks for a static URL in the profile, then falls back to Dynamic Signal.
+  /// Thin wrapper over [acquireSignal] for callers that only need the URL.
   Future<String?> getUserM3uUrl() async {
+    final result = await acquireSignal();
+    return result.url;
+  }
+
+  /// Resolve the user's signal. Returns a [SignalResult] so callers can show
+  /// a meaningful message when no signal could be acquired (e.g. all lines
+  /// are currently in use).
+  Future<SignalResult> acquireSignal() async {
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null) return null;
+      if (user == null) {
+        return const SignalResult(status: SignalStatus.notAuthenticated);
+      }
 
-      // 1. First Check: static URL in profile
+      // 1. Static URL in profile takes priority.
       final profile = await _supabase
           .schema('startflix')
           .from('profiles')
@@ -235,36 +306,76 @@ class M3uService {
 
       final staticUrl = profile?['m3u_url'] as String?;
       if (staticUrl != null && staticUrl.trim().isNotEmpty) {
-        return staticUrl.trim();
+        return SignalResult(status: SignalStatus.ok, url: staticUrl.trim());
       }
 
-      // 2. Second Check: Dynamic Signal (Acquire Signal RPC)
-      final dynamic response = await _supabase
-          .schema('startflix')
-          .rpc('acquire_signal', params: {'p_user_id': user.id});
+      // 2. Try the acquire_signal RPC.
+      Map<String, dynamic>? rpcResponse;
+      try {
+        final dynamic raw = await _supabase
+            .schema('startflix')
+            .rpc('acquire_signal', params: {'p_user_id': user.id});
+        if (raw is Map) {
+          rpcResponse = Map<String, dynamic>.from(raw);
+        }
+      } catch (rpcError) {
+        debugPrint('M3uService: acquire_signal RPC failed: $rpcError');
+      }
 
-      if (response != null && response['success'] == true) {
-        final dns = response['dns'] as String?;
-        final username = response['username'] as String?;
-        final password = response['password'] as String?;
-
-        if (dns != null && username != null && password != null) {
-          String host = dns.trim();
-          if (!host.startsWith('http')) host = 'http://$host';
-
-          if (host.contains('get.php')) return host;
-
-          if (host.endsWith('/')) host = host.substring(0, host.length - 1);
-
-          return '$host/get.php?username=$username&password=$password&type=m3u_plus&output=ts';
+      if (rpcResponse != null && rpcResponse['success'] == true) {
+        final url = _buildM3uUrl(
+          rpcResponse['dns'] as String?,
+          rpcResponse['username'] as String?,
+          rpcResponse['password'] as String?,
+        );
+        if (url != null) {
+          return SignalResult(status: SignalStatus.ok, url: url);
         }
       }
 
-      return null;
+      // 3. Direct query fallback for cases where the RPC failed entirely
+      //    (network error, function temporarily missing, etc.).
+      try {
+        final account = await _supabase
+            .schema('startflix')
+            .from('media_accounts')
+            .select('dns, username, password')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (account != null) {
+          final url = _buildM3uUrl(
+            account['dns'] as String?,
+            account['username'] as String?,
+            account['password'] as String?,
+          );
+          if (url != null) {
+            debugPrint('M3uService: signal found via direct query');
+            return SignalResult(status: SignalStatus.ok, url: url);
+          }
+        }
+      } catch (queryError) {
+        debugPrint('M3uService: direct media_accounts query failed: $queryError');
+      }
+
+      // No URL resolved. Differentiate "stock exhausted" from other failures.
+      if (rpcResponse != null && rpcResponse['error'] == 'lotado') {
+        return const SignalResult(status: SignalStatus.stockExhausted);
+      }
+      return const SignalResult(status: SignalStatus.unavailable);
     } catch (e) {
-      debugPrint('M3uService: URL retrieval error');
-      return null;
+      debugPrint('M3uService: URL retrieval error: $e');
+      return const SignalResult(status: SignalStatus.unavailable);
     }
+  }
+
+  static String? _buildM3uUrl(String? dns, String? username, String? password) {
+    if (dns == null || username == null || password == null) return null;
+    String host = dns.trim();
+    if (!host.startsWith('http')) host = 'http://$host';
+    if (host.contains('get.php')) return host;
+    if (host.endsWith('/')) host = host.substring(0, host.length - 1);
+    return '$host/get.php?username=$username&password=$password&type=m3u_plus&output=ts';
   }
 
   /// Release the signal (return to stock)
@@ -280,8 +391,45 @@ class M3uService {
     }
   }
 
+  /// Checks the server-side m3u_cache table for a pre-fetched copy of [url].
+  /// Only used for public/non-credential URLs (default lists).
+  Future<String?> _getServerCachedContent(String url) async {
+    if (url.contains('username=') || url.contains('password=')) return null;
+    try {
+      final row = await _supabase
+          .schema('startflix')
+          .from('m3u_cache')
+          .select('m3u_content, cached_at')
+          .eq('source_url', url)
+          .eq('status', 'ready')
+          .maybeSingle();
+      if (row == null) return null;
+      final cachedAt = DateTime.tryParse(row['cached_at'] ?? '');
+      final content = row['m3u_content'] as String?;
+      if (cachedAt == null || content == null || content.isEmpty) return null;
+      if (DateTime.now().difference(cachedAt) > _cacheTtl) return null;
+      return content;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<MediaItem>> parseM3uUrl(String url) async {
     final trimmedUrl = url.trim();
+
+    // For public default lists: try server-side cache first (faster than IPTV provider)
+    final serverContent = await _getServerCachedContent(trimmedUrl);
+    if (serverContent != null) {
+      try {
+        return await compute(
+          _parseM3uContentStatic,
+          Uint8List.fromList(utf8.encode(serverContent)),
+        );
+      } catch (_) {
+        // fall through to direct fetch
+      }
+    }
+
     try {
       final response = await http.get(
         Uri.parse(trimmedUrl),
