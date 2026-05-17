@@ -237,10 +237,12 @@ export const supabase = {
     getUser: () => Promise.resolve({ data: { user: null }, error: null }),
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     // No Supabase Auth: we just allocate an id and let the caller fill in details.
-    async signUp({ email }) {
+    async signUp({ email, password }) {
       const id = uuid();
+      const profileRow = { id, email, role: 'client', is_active: true };
+      if (password) profileRow.password_hash = password;
       const r = await new QueryBuilder('profiles', DEFAULT_SCHEMA)
-        .insert({ id, email, role: 'client', is_active: true })
+        .insert(profileRow)
         ._execute();
       if (r.error) {
         // Friendlier message for the most common failure

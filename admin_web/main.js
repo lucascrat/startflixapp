@@ -1435,7 +1435,8 @@ async function handleUserSubmit(e) {
       // Update the profile created (the trigger might be disabled, so we force update)
       await supabase.from('profiles').update(updates).eq('id', data.user.id);
     } else {
-      // Update EXISTING
+      // Update EXISTING — also update password_hash if a new password was typed
+      if (password) updates.password_hash = password;
       console.log("Atualizando perfil:", id, "com lista:", m3u);
       const { error: updateErr } = await supabase.from('profiles').update(updates).eq('id', id);
 
