@@ -11,6 +11,7 @@ import 'plans_screen.dart';
 import 'client_area_screen.dart';
 import 'admin_screen.dart';
 import 'local_player_screen.dart';
+import 'login_screen.dart';
 import '../models/media_item.dart';
 import '../services/ad_service.dart';
 
@@ -23,13 +24,14 @@ class MainTabScreen extends StatefulWidget {
 
 class _MainTabScreenState extends State<MainTabScreen>
     with WidgetsBindingObserver {
-  int _currentIndex = 0; // 0 = Discover (TMDB), 1 = Home (M3U)
+  int _currentIndex = 0;
   bool _isAdmin = false;
-  bool _hasM3U = true; // Default to true to show Main UI immediately
-  bool _isLoading = true; // Start true to load data
+  bool _hasM3U = true;
+  bool _isLoading = true;
   bool _isBlocked = false;
-  bool _isCodeAccess = false; // True when logged in via access code
-  bool _adsEnabled = true; // Whether ads are enabled for this user
+  bool _isCodeAccess = false;
+  bool _isLocalAccess = false; // True when using DNS/user/pass local mode
+  bool _adsEnabled = true;
   String _blockMessage = '';
 
   // Data lists
@@ -77,11 +79,29 @@ class _MainTabScreenState extends State<MainTabScreen>
     final prefs = await SharedPreferences.getInstance();
     final bool isCodeAccess = prefs.getBool('is_code_access') ?? false;
 
+    // ── Local access (DNS/user/pass) ──────────────────────────────────────
+    final bool isLocalAccess = prefs.getBool('is_local_access') ?? false;
+    if (isLocalAccess) {
+      if (mounted) {
+        setState(() {
+          _isLocalAccess = true;
+          _isCodeAccess = false;
+          _isAdmin = false;
+          _isBlocked = false;
+          _adsEnabled = false;
+          _hasM3U = true;
+          _currentIndex = 0;
+        });
+        await _loadM3uData();
+      }
+      return;
+    }
+
     if (isCodeAccess) {
-      print('MainTabScreen: Code access mode — acquiring signal from pool...');
       if (mounted) {
         setState(() {
           _isCodeAccess = true;
+          _isLocalAccess = false;
           _isAdmin = false;
           _isBlocked = false;
           _adsEnabled = true;
@@ -346,13 +366,25 @@ class _MainTabScreenState extends State<MainTabScreen>
   }
 
   Widget _buildMainContent() {
+    // Local access: only Canais / Filmes / Séries — no TMDB, no plans
+    if (_isLocalAccess) {
+      return IndexedStack(
+        index: _currentIndex,
+        children: [
+          HomeScreen(fixedTabIndex: 0, preloadedItems: _channels, adsEnabled: false),
+          HomeScreen(fixedTabIndex: 1, preloadedItems: _movies, adsEnabled: false),
+          HomeScreen(fixedTabIndex: 2, preloadedItems: _series, adsEnabled: false),
+        ],
+      );
+    }
+
     return IndexedStack(
       index: _currentIndex,
       children: [
         DiscoverScreen(),
-        HomeScreen(fixedTabIndex: 0, preloadedItems: _channels, adsEnabled: _adsEnabled), // Canais
-        HomeScreen(fixedTabIndex: 1, preloadedItems: _movies, adsEnabled: _adsEnabled), // Filmes
-        HomeScreen(fixedTabIndex: 2, preloadedItems: _series, adsEnabled: _adsEnabled), // Séries
+        HomeScreen(fixedTabIndex: 0, preloadedItems: _channels, adsEnabled: _adsEnabled),
+        HomeScreen(fixedTabIndex: 1, preloadedItems: _movies, adsEnabled: _adsEnabled),
+        HomeScreen(fixedTabIndex: 2, preloadedItems: _series, adsEnabled: _adsEnabled),
         PlansScreen(),
         ClientAreaScreen(),
       ],
@@ -528,9 +560,105 @@ class _MainTabScreenState extends State<MainTabScreen>
     );
   }
 
+  Future<void> _logoutLocalAccess() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('is_local_access');
+    await prefs.remove('local_dns');
+    await prefs.remove('local_username');
+    await prefs.remove('local_password');
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    }
+  }
+
   Widget _buildBottomBar(bool isTv) {
+    if (_isLocalAccess) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: isTv ? 80 : null,
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.9),
+              border: const Border(top: BorderSide(color: Colors.white10)),
+            ),
+            child: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: (index) => setState(() => _currentIndex = index),
+              backgroundColor: Colors.transparent,
+              selectedItemColor: AppColors.primaryRed,
+              unselectedItemColor: Colors.grey,
+              type: BottomNavigationBarType.fixed,
+              elevation: 0,
+              selectedFontSize: isTv ? 16 : 14,
+              unselectedFontSize: isTv ? 14 : 12,
+              iconSize: isTv ? 32 : 24,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.tv_outlined), activeIcon: Icon(Icons.tv), label: 'Canais',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.movie_outlined), activeIcon: Icon(Icons.movie), label: 'Filmes',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.video_library_outlined),
+                  activeIcon: Icon(Icons.video_library),
+                  label: 'Séries',
+                ),
+              ],
+            ),
+          ),
+          // Logout strip
+          GestureDetector(
+            onTap: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  backgroundColor: const Color(0xFF141414),
+                  title: const Text('Sair do Acesso Local', style: TextStyle(color: Colors.white)),
+                  content: const Text(
+                    'Deseja voltar à tela de login?',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Sair'),
+                    ),
+                  ],
+                ),
+              );
+              if (ok == true) _logoutLocalAccess();
+            },
+            child: Container(
+              color: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.logout, size: 14, color: Colors.white.withOpacity(0.3)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Acesso Local — Toque para sair',
+                    style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Container(
-      height: isTv ? 80 : null, // Taller bar for TV
+      height: isTv ? 80 : null,
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.9),
         border: const Border(top: BorderSide(color: Colors.white10)),
@@ -548,19 +676,13 @@ class _MainTabScreenState extends State<MainTabScreen>
         iconSize: isTv ? 32 : 24,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Início',
+            icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Início',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.tv_outlined),
-            activeIcon: Icon(Icons.tv),
-            label: 'Canais',
+            icon: Icon(Icons.tv_outlined), activeIcon: Icon(Icons.tv), label: 'Canais',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.movie_outlined),
-            activeIcon: Icon(Icons.movie),
-            label: 'Filmes',
+            icon: Icon(Icons.movie_outlined), activeIcon: Icon(Icons.movie), label: 'Filmes',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.video_library_outlined),
@@ -568,14 +690,10 @@ class _MainTabScreenState extends State<MainTabScreen>
             label: 'Séries',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.star_outline),
-            activeIcon: Icon(Icons.star),
-            label: 'Planos',
+            icon: Icon(Icons.star_outline), activeIcon: Icon(Icons.star), label: 'Planos',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Perfil',
+            icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Perfil',
           ),
         ],
       ),

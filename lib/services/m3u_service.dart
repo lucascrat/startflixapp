@@ -355,15 +355,27 @@ class M3uService {
   /// Resolve the user's signal. Returns a [SignalResult] so callers can show
   /// a meaningful message when no signal could be acquired.
   ///
-  /// Works for both authenticated users and code-access users (which use a
-  /// persistent device UUID stored in SharedPreferences).
+  /// Priority: local access → code access → authenticated user (pool or static URL).
   Future<SignalResult> acquireSignal() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // ── Local access path (DNS + user + pass stored on device) ───────────
+      // No database calls — URL is built entirely from local prefs.
+      final isLocalAccess = prefs.getBool('is_local_access') ?? false;
+      if (isLocalAccess) {
+        final dns = prefs.getString('local_dns') ?? '';
+        final username = prefs.getString('local_username') ?? '';
+        final password = prefs.getString('local_password') ?? '';
+        final url = _buildM3uUrl(dns, username, password);
+        if (url != null) return SignalResult(status: SignalStatus.ok, url: url);
+        return const SignalResult(status: SignalStatus.unavailable);
+      }
+
       final user = _supabase.auth.currentUser;
 
       // ── Code-access path (no Supabase auth session) ──────────────────────
       if (user == null) {
-        final prefs = await SharedPreferences.getInstance();
         final isCodeAccess = prefs.getBool('is_code_access') ?? false;
         if (!isCodeAccess) {
           return const SignalResult(status: SignalStatus.notAuthenticated);
@@ -404,14 +416,16 @@ class M3uService {
   }
 
   /// Release the signal back to the pool.
-  /// Works for both authenticated users and code-access users.
+  /// No-op for local access (no DB involved).
   Future<void> releaseSignal() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('is_local_access') ?? false) return;
+
       final user = _supabase.auth.currentUser;
       String? userId = user?.id;
 
       if (userId == null) {
-        final prefs = await SharedPreferences.getInstance();
         final isCodeAccess = prefs.getBool('is_code_access') ?? false;
         if (!isCodeAccess) return;
         userId = prefs.getString('code_session_id');
@@ -428,12 +442,15 @@ class M3uService {
 
   /// Starts a periodic heartbeat (every 2 min) so the admin panel can detect
   /// active users and auto-release signals from users who left the app.
+  /// No-op for local access (no DB involved).
   Future<void> startHeartbeat() async {
     _heartbeatTimer?.cancel();
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('is_local_access') ?? false) return;
+
     final user = _supabase.auth.currentUser;
     String? userId = user?.id;
     if (userId == null) {
-      final prefs = await SharedPreferences.getInstance();
       final isCodeAccess = prefs.getBool('is_code_access') ?? false;
       if (!isCodeAccess) return;
       userId = prefs.getString('code_session_id');
