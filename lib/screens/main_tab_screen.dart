@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/constants.dart';
@@ -14,6 +15,23 @@ import 'local_player_screen.dart';
 import 'login_screen.dart';
 import '../models/media_item.dart';
 import '../services/ad_service.dart';
+
+// Top-level — required for compute() (no closures, no instance state)
+Map<String, List<MediaItem>> _splitItemsByCategory(List<MediaItem> items) {
+  final channels = <MediaItem>[];
+  final movies = <MediaItem>[];
+  final series = <MediaItem>[];
+  for (final item in items) {
+    if (item.isSeries) {
+      series.add(item);
+    } else if (item.isMovie) {
+      movies.add(item);
+    } else {
+      channels.add(item);
+    }
+  }
+  return {'channels': channels, 'movies': movies, 'series': series};
+}
 
 class MainTabScreen extends StatefulWidget {
   const MainTabScreen({super.key});
@@ -247,15 +265,15 @@ class _MainTabScreenState extends State<MainTabScreen>
       final String resolvedUrl = url; // non-null guaranteed by checks above
       final staleItems = await m3uService.getStaleCachedItems(resolvedUrl);
       if (staleItems != null && staleItems.isNotEmpty) {
-        _categorizeItems(staleItems);
+        await _categorizeItems(staleItems);
         if (mounted) setState(() => _isLoading = false);
 
         final fresh = await m3uService.isCacheFresh(resolvedUrl);
         if (!fresh) {
-          m3uService.parseM3uUrl(resolvedUrl).then((freshItems) {
+          m3uService.parseM3uUrl(resolvedUrl).then((freshItems) async {
             if (freshItems.isNotEmpty) {
               m3uService.cacheM3uItems(resolvedUrl, freshItems);
-              if (mounted) _categorizeItems(freshItems);
+              if (mounted) await _categorizeItems(freshItems);
             }
           }).catchError((_) {});
         }
@@ -266,7 +284,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       final items = await m3uService.parseM3uUrl(resolvedUrl);
       if (items.isNotEmpty) {
         await m3uService.cacheM3uItems(resolvedUrl, items);
-        _categorizeItems(items);
+        await _categorizeItems(items);
       }
     } catch (e) {
       print('MainTabScreen: Error loading data: $e');
@@ -292,26 +310,13 @@ class _MainTabScreenState extends State<MainTabScreen>
     }
   }
 
-  void _categorizeItems(List<MediaItem> items) {
-    List<MediaItem> channels = [];
-    List<MediaItem> movies = [];
-    List<MediaItem> series = [];
-
-    for (var item in items) {
-      if (item.isSeries) {
-        series.add(item);
-      } else if (item.isMovie) {
-        movies.add(item);
-      } else {
-        channels.add(item);
-      }
-    }
-
+  Future<void> _categorizeItems(List<MediaItem> items) async {
+    final result = await compute(_splitItemsByCategory, items);
     if (mounted) {
       setState(() {
-        _channels = channels;
-        _movies = movies;
-        _series = series;
+        _channels = result['channels']!;
+        _movies = result['movies']!;
+        _series = result['series']!;
       });
     }
   }

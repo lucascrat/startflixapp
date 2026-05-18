@@ -45,15 +45,6 @@ class M3uService {
     return base64Encode(utf8.encode(url));
   }
 
-  /// Deobfuscate a stream URL from cache
-  static String _deobfuscateUrl(String encoded) {
-    try {
-      return utf8.decode(base64Decode(encoded));
-    } catch (_) {
-      return encoded; // Fallback for old cache format
-    }
-  }
-
   static String normalizeTitle(String title) {
     if (title.isEmpty) return '';
     String text = title.toLowerCase();
@@ -114,9 +105,8 @@ class M3uService {
       if (file == null || !await file.exists()) return {};
       final content = await file.readAsString();
       if (content.isEmpty) return {};
-      final data = json.decode(content);
-      if (data is! Map || data['version'] != 21) return {};
-      return Map<String, dynamic>.from(data['slots'] ?? {});
+      // json.decode on large files blocks the main thread → offload to isolate
+      return await compute(_decodeCacheJson, content);
     } catch (_) {
       return {};
     }
@@ -128,17 +118,6 @@ class M3uService {
       if (file == null) return;
       await file.writeAsString(json.encode({'version': 21, 'slots': slots}));
     } catch (_) {}
-  }
-
-  List<MediaItem> _decodeItems(dynamic rawList) {
-    if (rawList == null) return [];
-    return (rawList as List).map((j) {
-      final map = Map<String, dynamic>.from(j as Map);
-      if (map['url'] != null && !map['url'].toString().startsWith('http')) {
-        map['url'] = _deobfuscateUrl(map['url'].toString());
-      }
-      return MediaItem.fromJson(map);
-    }).toList();
   }
 
   Future<Map<String, dynamic>?> _getCacheEntry(String url) async {
@@ -195,7 +174,9 @@ class M3uService {
     if (entry == null) return null;
     final ts = DateTime.tryParse(entry['timestamp'] ?? '');
     if (ts == null || DateTime.now().difference(ts) > _cacheTtl) return null;
-    return _decodeItems(entry['items']);
+    final rawList = entry['items'];
+    if (rawList == null) return [];
+    return compute(_decodeMediaItems, List<dynamic>.from(rawList as List));
   }
 
   /// Returns cached items ignoring TTL (stale-while-revalidate).
@@ -204,7 +185,9 @@ class M3uService {
     if (kIsWeb) return null;
     final entry = await _getCacheEntry(url);
     if (entry == null) return null;
-    return _decodeItems(entry['items']);
+    final rawList = entry['items'];
+    if (rawList == null) return [];
+    return compute(_decodeMediaItems, List<dynamic>.from(rawList as List));
   }
 
   /// True if a cache entry exists AND is younger than [_cacheTtl].
@@ -261,21 +244,14 @@ class M3uService {
 
   Future<List<String>> getCachedAvailableTitles() async {
     try {
-      // Use centralized URL retrieval to handle both Static and Dynamic URLs
       final url = await getUserM3uUrl();
       if (url == null) return [];
 
       final items = await getStaleCachedItems(url);
-      if (items == null) return [];
+      if (items == null || items.isEmpty) return [];
 
-      final Set<String> uniqueTitles = {};
-      for (var item in items) {
-        final normalized = normalizeTitle(item.title);
-        if (normalized.length > 2) {
-          uniqueTitles.add(normalized);
-        }
-      }
-      return uniqueTitles.toList();
+      final rawTitles = items.map((i) => i.title).toList();
+      return compute(_buildNormalizedTitles, rawTitles);
     } catch (e) {
       debugPrint('M3uService: Available titles error');
       return [];
@@ -538,6 +514,48 @@ class M3uService {
 }
 
 // --- Static functions for compute ---
+
+/// Decode the cache JSON string and return only the `slots` map.
+/// Runs in a background isolate via compute() to avoid blocking the main thread.
+Map<String, dynamic> _decodeCacheJson(String content) {
+  try {
+    final decoded = json.decode(content);
+    if (decoded is Map) {
+      final slots = decoded['slots'];
+      if (slots is Map) return Map<String, dynamic>.from(slots);
+      // Legacy format without 'slots' wrapper
+      return Map<String, dynamic>.from(decoded);
+    }
+    return {};
+  } catch (_) {
+    return {};
+  }
+}
+
+/// Decode a raw JSON list into MediaItem objects.
+/// Runs in a background isolate via compute() — avoids 10k+ fromJson calls on main thread.
+List<MediaItem> _decodeMediaItems(List<dynamic> rawList) {
+  return rawList.map((j) {
+    final map = Map<String, dynamic>.from(j as Map);
+    if (map['url'] != null && !map['url'].toString().startsWith('http')) {
+      try {
+        map['url'] = utf8.decode(base64Decode(map['url'].toString()));
+      } catch (_) {}
+    }
+    return MediaItem.fromJson(map);
+  }).toList();
+}
+
+/// Normalize a list of raw title strings and return unique normalized titles.
+/// Runs in a background isolate via compute() — avoids 10k+ regex ops on main thread.
+List<String> _buildNormalizedTitles(List<String> rawTitles) {
+  final Set<String> unique = {};
+  for (final title in rawTitles) {
+    final normalized = M3uService.normalizeTitle(title);
+    if (normalized.length > 2) unique.add(normalized);
+  }
+  return unique.toList();
+}
 
 Future<List<MediaItem>> _parseM3uContentStatic(Uint8List bytes) async {
   final List<MediaItem> items = [];
